@@ -1,167 +1,80 @@
-# HTBScan
+# HTBRecon
 
-
-
-**HTBScan** is a powerful Bash script designed to automate reconnaissance and security scanning tasks on target machines, particularly for Hack The Box (HTB) challenges. It leverages popular tools like Nmap, FFUF, and Dirsearch to detect open ports, subdomains, directories, and potential vulnerabilities.
+**HTBRecon** is an automated reconnaissance tool for **Hack The Box** machines (or similar environments). It performs Nmap scans, detects subdomains, directories, and vulnerabilities using Nuclei, all in a single Bash script.
 
 ---
 
-## 🌟 Features
-
-- **Nmap Scanning**: Detect open ports and running services
-- **Subdomain Discovery**: Use FFUF to discover subdomains
-- **Directory Search**: Use FFUF to discover accessible directories and files
-- **Vulnerability Detection**: (Optional) Integration with Nuclei to detect vulnerabilities
-- **Additional HTTP Ports Detection**: Detect and notify about additional open HTTP ports (like 8080, 3000, etc.)
-- **Automated Reporting**: Generate structured output for easy analysis
-- **Colorful Output**: Easy-to-read colored console output
+## 📌 Features
+- **Nmap Scanning**: Discover open ports and services.
+- **Subdomain Detection**: Use FFUF to identify subdomains.
+- **Directory Scanning**: Search for sensitive files and directories.
+- **Vulnerability Detection**: Use Nuclei to identify vulnerabilities.
+- **Recursive Scanning**: Scan subdomains with the `-r` flag.
+- **Report Generation**: Organized results in JSON/HTML files.
 
 ---
 
-## 📋 Prerequisites
+## 📦 Installation
 
-This is specficly designed to Exegol but you can use it by installing dependencies below.
+### Requirements
+- **OS**: Linux (tested on Kali Linux, Parrot OS, Ubuntu).
+- **Required Tools**:
+  ```bash
+  sudo apt update && sudo apt install -y nmap ffuf nuclei jq xsltproc
+Clone the Repository
+git clone https://github.com/your-username/HTBScan.git
+cd HTBScan
+chmod +x htbscan.sh
 
-Before using HTBScan, ensure you have the following tools installed:
+🚀 Usage
+Basic Command
+sudo ./htbscan.sh -i <IP> -n <MACHINE_NAME>
 
-| Tool       | Purpose                          | Installation Command (Debian/Ubuntu) |
-|------------|----------------------------------|--------------------------------------|
-| Nmap       | Port scanning                    | `sudo apt-get install nmap`        |
-| FFUF       | Subdomain/directory discovery     | `sudo apt-get install ffuf`        |
-| jq         | JSON file processing             | `sudo apt-get install jq`          |
-| xsltproc   | Convert Nmap results to HTML     | `sudo apt-get install xsltproc`    |
-| cURL       | HTTP requests                    | `sudo apt-get install curl`        |
+<IP>: Target IP address.
+<MACHINE_NAME>: Output directory name (e.g., machine1).
 
-Install all prerequisites with:
-```bash
-sudo apt-get update && sudo apt-get install -y nmap ffuf jq xsltproc curl
-```
+Options
+-i <IP> Target IP address (required).
+-n <NAME> Output directory name (required).
+-r Enable recursive scans on subdomains (FFUF + Nuclei).
+-h Display help.
+Examples
 
----
+Basic Scan:
+sudo ./htbscan.sh -i 10.10.10.10 -n machine1
 
-## 🚀 Installation
+Recursive Scan:
+sudo ./htbscan.sh -i 10.10.10.10 -n machine1 -r
 
-1. **Clone the repository** or download the `htbscan.sh` script:
-   ```bash
-   git clone https://github.com/yourusername/htbscan.git
-   cd htbscan
-   ```
 
-2. **Make the script executable**:
-   ```bash
-   chmod +x htbscan.sh
-   ```
 
----
-
-## 🛠 Usage
-
-### Basic Syntax
-```bash
-./htbscan.sh -i <TARGET_IP> -n <OUTPUT_NAME>
-```
-
-| Option | Description                     | Example          |
-|--------|---------------------------------|------------------|
-| `-i`    | Target IP address              | `10.10.10.10`    |
-| `-n`    | Output directory name          | `machine1`        |
-
-### Example
-```bash
-./htbscan.sh -i 10.10.10.10 -n machine1
-```
-
----
-
-## 📂 Results Structure
-
-The scan results will be stored in a directory with the name you specified (`<OUTPUT_NAME>`):
-
-```
-<OUTPUT_NAME>/
+📂 Results Structure
+Results are saved in a directory named <MACHINE_NAME>/:
+machine1/
 ├── nmap/
-│   ├── initial.nmap    # Initial Nmap scan results
-│   ├── initial.xml     # XML format of initial scan
-│   ├── initial.html    # HTML report of initial scan
-│   ├── full.xml        # Full port scan results
-│   └── full.html       # HTML report of full scan
-├── subdomain.json    # Subdomain discovery results
-├── dirscan.json      # Directory discovery results
-└── scan_errors.log     # Error log file
-```
+│   ├── initial.nmap
+│   ├── full.xml
+│   └── full.html
+├── subdomains.json
+├── dirscan.json
+├── nuclei.json
+└── scan_errors.log
 
----
+🎥 Demo
 
-## 📝 Example Output
+(Replace demo.gif with the path or URL of your video/GIF.)
 
-```bash
-[+] Starting HTBScan for editor at IP 10.10.11.80
-[*] Created directory: editor/nmap
-[+] Running initial Nmap scan...
-[+] Running full Nmap scan in background...
-[*] Parsing initial Nmap for URL...
-[*] Parsed HTTP_PORT: 80
-[*] Other open HTTP ports detected: 8080
-[+] Detected HTTP URL: http://editor.htb (Port: 80)
-[*] Using domain for vhost fuzzing and hosts file: editor.htb
-[+] Running subdomain/vhost scanning...
-[*] Detecting common response sizes for filtering...
-[+] subdomains/vhost scan completed. Results in machine1/ffuf_vhosts.json
-[+] Running dirsearch...
-[+] Dirsearch completed. Results in machine1/dirsearch.json
-[+] Scan Summary for editor:
-    Initial Nmap: editor/nmap/initial.nmap
-    Detected URL: http://editor.htb
-    Subdomain scan: editor/subdomain.json
-    Directory scan: editor/dirsearch.json
-[+] All scans completed.
-```
+⚙️ Configuration
 
----
+Wordlists: Modify the wordlist paths in the script (WORDLIST, VHOST_WORDLIST).
+Recursion Depth: Adjust the DEPTH variable for FFUF scans.
+Extensions: Customize EXTENSIONS to target specific file types (e.g., php,html,js).
 
-## 🔧 Configuration
 
-You can adjust the following environment variables at the top of the script:
+🛠 Contributing
+Contributions are welcome!
 
-```bash
-export THREADS=25                  # Number of threads for FFUF
-export DEPTH=1                     # Directory search depth
-export EXTENSIONS=html,php,js,txt  # File extensions to search for
-```
+Add new features.
+Fix bugs.
+Improve documentation.
 
-Wordlists paths (adjust according to your system):
-```bash
-export WORDLIST=/usr/share/wordlists/seclists/Discovery/Web-Content/raft-small-directories-lowercase.txt
-export VHOST_WORDLIST=/usr/share/wordlists/seclists/Discovery/DNS/subdomains-top1million-5000.txt
-```
-
----
-
-## 🤝 Contributing
-
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
-
-## �� License
-
-Distributed under the MIT License. See `LICENSE` for more information.
-
----
-
-## 📧 Contact
-
-Project Link: [https://github.com/ExHo7/htbscan]
-
----
-
-## 🙏 Acknowledgements
-
-- [Exegol]
-- [HackTheBox]
