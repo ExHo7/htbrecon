@@ -203,8 +203,8 @@ main() {
 	FOUND_DIRECTORY=$(jq -r '.results[] | select(.status != 0) | .input.FUZZ' "$NAME/dirscan.json")
         if [ -n "$FOUND_DIRECTORY" ]; then
             echo -e "${CYAN}[+] Directory found :${RESET}"
-            echo "$FOUND_DIRECTORY" | while read sub; do
-                echo -e "${YELLOW}    $DOMAIN/$sub${RESET}"
+            echo "$FOUND_DIRECTORY" | while read dir; do
+                echo -e "${YELLOW}    $DOMAIN/$dir${RESET}"
             done
         else
             echo -e "${YELLOW}[-] Sorry nothing find.${RESET}"
