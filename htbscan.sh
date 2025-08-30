@@ -22,14 +22,13 @@ RESET="\e[0m"
 display_banner() {
 echo -e "${BLUE}"
 cat <<'EOF'
-  _    _ _______ ____   _____                 
- | |  | |__   __|  _ \ / ____|                
- | |__| |  | |  | |_) | (___   ___ __ _ _ __  
- |  __  |  | |  |  _ < \___ \ / __/ _` | '_ \ 
- | |  | |  | |  | |_) |____) | (_| (_| | | | |
- |_|  |_|  |_|  |____/|_____/ \___\__,_|_| |_|
-                                              
-
+  _    _ _______ ____  _____                      
+ | |  | |__   __|  _ \|  __ \                     
+ | |__| |  | |  | |_) | |__) |___  ___ ___  _ __  
+ |  __  |  | |  |  _ <|  _  // _ \/ __/ _ \| '_ \ 
+ | |  | |  | |  | |_) | | \ \  __/ (_| (_) | | | |
+ |_|  |_|  |_|  |____/|_|  \_\___|\___\___/|_| |_|
+                                                  
 EOF
 echo -e "${RESET}"
 echo -e "${MAGENTA}Made with 💚 by cyber_fish 🐡${RESET}"
@@ -43,7 +42,7 @@ parse_args() {
             n) NAME="$OPTARG" ;;
             r) RECURSION=true ;;
             h)
-                echo -e "${GREEN}HTBScan - Recon scanner for Hack The Box${RESET}"
+                echo -e "${GREEN}HTBRecon - Recon scanner for Hack The Box${RESET}"
                 echo -e "${YELLOW}Usage: $0 -i <IP> -n <NAME> [OPTIONS]${RESET}"
                 echo -e "${YELLOW}Options:${RESET}"
                 echo -e "  -i <IP>     Target IP address"
