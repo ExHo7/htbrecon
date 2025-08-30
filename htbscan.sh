@@ -4,7 +4,6 @@
 export THREADS=25
 export WORDLIST=/usr/share/wordlists/seclists/Discovery/Web-Content/raft-small-directories-lowercase.txt  # Default wordlist for dirsearch
 export VHOST_WORDLIST=/usr/share/wordlists/seclists/Discovery/DNS/subdomains-top1million-5000.txt  # Wordlist for vhost/subdomain fuzzing
-export NMAP_INITIAL_OPTS="-sC -sV -T4"  # Options for initial Nmap scan
 export NMAP_FULL_OPTS="-A -p-"  # Options for full Nmap scan
 export DEPTH=1
 export EXTENSIONS=html,php,js,txt,bak,kdbx
@@ -29,7 +28,6 @@ cat <<'EOF'
  | |  | |  | |  | |_) |____) | (_| (_| | | | |
  |_|  |_|  |_|  |____/|_____/ \___\__,_|_| |_|
                                               
-
 EOF
 echo -e "${RESET}"
 echo -e "${MAGENTA}Made with 💚 by cyber_fish 🐡${RESET}"
@@ -101,7 +99,7 @@ main() {
 
     # Initial Nmap scan
     echo -e "${GREEN}[+] Running initial Nmap scan...${RESET}"
-    if ! nmap $NMAP_INITIAL_OPTS $IP -oA "$NAME/nmap/initial" 2>>"$LOG_FILE"; then
+    if ! nmap -sC -sV -T4 $IP -oA "$NAME/nmap/initial" 2>>"$LOG_FILE"; then
         echo -e "${RED}[-] Initial Nmap scan failed. Check $LOG_FILE for details.${RESET}"
         exit 1
     fi
@@ -135,7 +133,7 @@ main() {
         echo -e "${YELLOW}[-] No other open HTTP ports detected.${RESET}"
     fi
 
-    # Debug: Show parsed values
+    # Show parsed values
     echo -e "${YELLOW}[*] Parsed HTTP_PORT: $HTTP_PORT${RESET}"
     echo -e "${YELLOW}[*] Parsed HTTPS_PORT: $HTTPS_PORT${RESET}"
     echo -e "${YELLOW}[*] Parsed REDIRECT_URL: $REDIRECT_URL${RESET}"
