@@ -126,7 +126,7 @@ check_dependencies() {
         exit 1
     fi
     if ! command -v ffuf &> /dev/null; then
-        echo -e "${RED}[*] ffuf is not installed. Please install it first.${RESET}"
+        echo -e "${RED}[-] ffuf is not installed. Please install it first.${RESET}"
         exit 1
     fi
     if ! command -v jq &> /dev/null; then
@@ -138,7 +138,7 @@ check_dependencies() {
         NO_XSLTPROC=true
     fi
     if ! command -v nuclei &> /dev/null; then
-        echo -e "${RED}[*] Nuclei is not installed. Please install it first.${RESET}"
+        echo -e "${RED}[-] Nuclei is not installed. Please install it first.${RESET}"
         exit 1
     fi
 }
@@ -198,7 +198,7 @@ main() {
     if [ -n "$OTHER_HTTP_PORTS" ]; then
         echo -e "${CYAN}[*] Other open HTTP ports detected: $OTHER_HTTP_PORTS${RESET}"
     else
-        echo -e "${YELLOW}[-] No other open HTTP ports detected.${RESET}"
+        echo -e "${YELLOW}[*] No other open HTTP ports detected.${RESET}"
     fi
     
     # URL Detection
@@ -274,7 +274,7 @@ main() {
                 fi
             done < <(echo "$FOUND_SUBDOMAINS")
         else
-            echo -e "${YELLOW}[-] No subdomain found.${RESET}"
+            echo -e "${YELLOW}[*] No subdomain found.${RESET}"
         fi
     fi
 
@@ -292,7 +292,7 @@ main() {
                 echo -e "${YELLOW}    $DOMAIN/$dir${RESET}"
             done
         else
-            echo -e "${YELLOW}[-] No directory found.${RESET}"
+            echo -e "${YELLOW}[*] No directory found.${RESET}"
         fi
     fi
 
@@ -309,7 +309,7 @@ main() {
                 echo -e "${YELLOW}    $vuln${RESET}"
             done
         else
-            echo -e "${YELLOW}[-] Sorry nothing found.${RESET}"
+            echo -e "${YELLOW}[*] No vulnerability found.${RESET}"
         fi
     fi
 
@@ -346,6 +346,7 @@ main() {
     echo -e "${CYAN}Initial Nmap: $NAME/nmap/initial.nmap${RESET}"
     echo -e "${CYAN}Full Nmap: $NAME/nmap/full.html${RESET}"
     echo -e "${CYAN}Detected URL: $URL${RESET}"
+    echo -e "${CYAN}Directory scan: $NAME/dirscan.json${RESET}"
     echo -e "${CYAN}Nuclei scan: $NAME/nuclei.json${RESET}"
     echo -e "${GREEN}[+] All scans completed.${RESET}"
 }
