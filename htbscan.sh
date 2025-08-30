@@ -30,7 +30,7 @@ cat <<'EOF'
                                               
 EOF
 echo -e "${RESET}"
-echo -e "${BLUE}With ❤️‍🔥 by cyber_fish${RESET}"
+echo -e "${BLUE}Made with ❤️‍🔥 by cyber_fish${RESET}"
 echo -e "${YELLOW}Recon scanner for Hack The Box machine${RESET}
 echo ""
 }
@@ -123,7 +123,7 @@ main() {
     HTTPS_PORT=$(grep -iE '443/tcp.*open.*https' "$NAME/nmap/initial.nmap" | awk -F/ '{print $1}')
     REDIRECT_URL=$(grep -iE '_http-title:.*redirect to' "$NAME/nmap/initial.nmap" | sed -n 's/.*[Rr]edirect to \+\([^ ]*\).*/\1/p' | head -n 1)
 
-    # Detect other open HTTP ports (e.g., 8080, 3000)
+    # Detect other open HTTP ports
     OTHER_HTTP_PORTS=$(grep -E '(8080|3000|8000|8888)/tcp.*open' "$NAME/nmap/initial.nmap" | awk -F/ '{print $1}' | tr '\n' ' ')
 
     # Inform the user about other open HTTP ports
@@ -175,7 +175,7 @@ main() {
         echo -e "${YELLOW}[*] Detected recurrent sizes: $COMMON_SIZES. Applying filter: $FS_PARAM${RESET}"
     else
         FS_PARAM=""
-        echo -e "${YELLOW}[*] No common sizes detected. Proceeding without size filter.${RESET}"
+        echo -e "${YELLOW}[-] No common sizes detected. Proceeding without size filter.${RESET}"
     fi
 
     # Rerun FFUF with filter
@@ -190,7 +190,7 @@ main() {
                 echo -e "${YELLOW}    $sub.$DOMAIN${RESET}"
             done
         else
-            echo -e "${YELLOW}[*] Sorry nothing found.${RESET}"
+            echo -e "${YELLOW}[-] Sorry nothing found.${RESET}"
         fi
     fi
 
@@ -207,7 +207,7 @@ main() {
                 echo -e "${YELLOW}    $DOMAIN/$dir${RESET}"
             done
         else
-            echo -e "${YELLOW}[*] Sorry nothing found.${RESET}"
+            echo -e "${YELLOW}[-] Sorry nothing found.${RESET}"
         fi
     fi
 
@@ -224,7 +224,7 @@ main() {
                 echo -e "${YELLOW}    $vuln${RESET}"
             done
         else
-            echo -e "${YELLOW}[*] Sorry nothing found.${RESET}"
+            echo -e "${YELLOW}[-] Sorry nothing found.${RESET}"
         fi
     fi
 
