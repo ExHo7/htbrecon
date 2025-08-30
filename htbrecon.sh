@@ -5,9 +5,9 @@ export THREADS=25
 export WORDLIST=/usr/share/wordlists/seclists/Discovery/Web-Content/raft-small-directories-lowercase.txt  # Default wordlist for dirsearch
 export VHOST_WORDLIST=/usr/share/wordlists/seclists/Discovery/DNS/subdomains-top1million-5000.txt  # Wordlist for vhost/subdomain fuzzing
 export NMAP_FULL_OPTS="-A -p-"  # Options for full Nmap scan
-export DEPTH=1
-export EXTENSIONS=html,php,js,txt,bak,kdbx
-RECURSION=false
+export DEPTH=1 # Recursion depth for dirsearch
+export EXTENSIONS=html,php,js,txt,bak,kdbx # Extensions for dirsearch
+RECURSION=false 
 
 # Color codes
 RED="\e[31m"
@@ -123,7 +123,7 @@ main() {
 
     LOG_FILE="$NAME/scan_errors.log"
 
-    echo -e "${GREEN}[+] Starting HTBScan for $NAME at IP $IP${RESET}"
+    echo -e "${GREEN}[+] Starting HTBScan for $NAME at IP $IP${RESET} 🚀"
 
     # Create directory structure
     mkdir -p "$NAME/nmap"
@@ -199,7 +199,7 @@ main() {
     update_hosts "$IP" "$DOMAIN"
 
     # FFUF for subdomains/vhosts
-    echo -e "${GREEN}[+] Running subdomain/vhost scanning...${RESET}"
+    echo -e "${GREEN}[+] Running subdomain scanning...${RESET}"
     # Initial FFUF run to detect common response sizes
     echo -e "${YELLOW}[*] Detecting common response sizes for filtering...${RESET}"
     ffuf -u "$URL" -H "Host: FUZZ.$DOMAIN" -w "$VHOST_WORDLIST" -t $THREADS -o $NAME/ffuf_initial.json > /dev/null 2>&1
@@ -218,18 +218,18 @@ main() {
     ffuf -u "$URL" -H "Host: FUZZ.$DOMAIN" -w "$VHOST_WORDLIST" -t $THREADS -mc all $FS_PARAM -o "$NAME/subdomains.json" > /dev/null 2>&1
     FFUF_EXIT=$?
     if [ $FFUF_EXIT -eq 0 ] || [ $FFUF_EXIT -eq 2 ]; then
-        echo -e "${GREEN}[+] subdomains/vhost scan completed. Results in $NAME/subdomains.json${RESET}"
+        echo -e "${GREEN}[+] subdomains scan completed. Results in $NAME/subdomains.json${RESET}"
         FOUND_SUBDOMAINS=$(jq -r '.results[] | select(.status != 0) | .input.FUZZ' "$NAME/subdomains.json")
         if [ -n "$FOUND_SUBDOMAINS" ]; then
-            echo -e "${CYAN}[+] Subdomain found :${RESET}"
+            echo -e "${CYAN}[+] Subdomain found ✨:${RESET}"
             while read -r sub; do
                 full_subdomain="$sub.$DOMAIN"
                 echo -e "${YELLOW}    $full_subdomain${RESET}"
                 update_hosts "$IP" "$full_subdomain"
                 if [ "$RECURSION" = true ]; then
-                    echo -e "${GREEN}[+] Running Nuclei on $full_subdomain...${RESET}"
+                    echo -e "${GREEN}[+] Running Nuclei on $full_subdomain...please wait ☕${RESET}"
                     nuclei -u "http://$full_subdomain" -as -json-export "$NAME/nuclei_${sub}.json" > /dev/null 2>&1 &
-                    echo -e "${GREEN}[+] Running directory scan on $full_subdomain...${RESET}"
+                    echo -e "${GREEN}[+] Running directory scan on $full_subdomain...please wait ☕${RESET}"
                     ffuf -u "http://$full_subdomain/FUZZ" -w "$WORDLIST" -t $THREADS -recursion-depth $DEPTH -e $EXTENSIONS -o "$NAME/dirscan_${sub}.json" > /dev/null 2>&1 &
                 fi
             done < <(echo "$FOUND_SUBDOMAINS")
@@ -240,14 +240,14 @@ main() {
     fi
 
     # Dirsearch for directories using the full Nmap XML report
-    echo -e "${GREEN}[+] Running dirsearch...${RESET}"
+    echo -e "${GREEN}[+] Running dirsearch...please wait ☕${RESET}"
     ffuf -u "${URL%/}/FUZZ" -w "$WORDLIST" -t $THREADS -recursion-depth $DEPTH -e $EXTENSIONS -r -o "$NAME/dirscan.json" > /dev/null 2>&1
     FFUF_EXIT=$?
     if [ $FFUF_EXIT -eq 0 ] || [ $FFUF_EXIT -eq 2 ]; then
         echo -e "${GREEN}[+] Dirsearch completed. Results in $NAME/dirscan.json${RESET}"
 	FOUND_DIRECTORY=$(jq -r '.results[] | select(.status != 0) | .input.FUZZ' "$NAME/dirscan.json")
         if [ -n "$FOUND_DIRECTORY" ]; then
-            echo -e "${CYAN}[+] Directory found :${RESET}"
+            echo -e "${CYAN}[+] Directory found ✨:${RESET}"
             echo "$FOUND_DIRECTORY" | while read dir; do
                 echo -e "${YELLOW}    $DOMAIN/$dir${RESET}"
             done
@@ -257,14 +257,14 @@ main() {
     fi
 
     # Nuclei
-    echo -e "${GREEN}[+] Running Nuclei...${RESET}"
+    echo -e "${GREEN}[+] Running Nuclei...please wait ☕${RESET}"
     nuclei -u "$URL" -as -json-export "$NAME/nuclei.json" > /dev/null 2>&1
     FFUF_EXIT=$?
     if [ $FFUF_EXIT -eq 0 ] || [ $FFUF_EXIT -eq 2 ]; then
 	echo -e "${GREEN}[+] Nuclei scan completed. Results in $NAME/nuclei.json${RESET}"
     FOUND_VULNERABILITY=$(jq -r '.[] | select(.info.severity as $severity | ($severity == "low" or $severity == "medium" or $severity == "high")) | "\(.info.name) - Severity: \(.info.severity)"' "$NAME/nuclei.json")
         if [ -n "$FOUND_VULNERABILITY" ]; then
-            echo -e "${CYAN}[+] Vulnerability found :${RESET}"
+            echo -e "${CYAN}[+] Vulnerability found ✨:${RESET}"
             echo "$FOUND_VULNERABILITY" | while read vuln; do
                 echo -e "${YELLOW}    $vuln${RESET}"
             done
