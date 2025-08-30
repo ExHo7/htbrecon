@@ -3,11 +3,10 @@
 # Adjustable environment variables
 export THREADS=25
 export WORDLIST=/usr/share/wordlists/seclists/Discovery/Web-Content/raft-small-directories-lowercase.txt  # Default wordlist for dirsearch
-export VHOST_WORDLIST=/usr/share/wordlists/seclists/Discovery/DNS/subdomains-top1million-5000.txt  # Wordlist for vhost/subdomain fuzzing
-export NMAP_INITIAL_OPTS="-sC -sV -T4"  # Options for initial Nmap scan
+export VHOST_WORDLIST=/usr/share/wordlists/seclists/Discovery/DNS/subdomains-top1million-5000.txt  # Wordlist for vhost/subdomain fuzzing 
 export NMAP_FULL_OPTS="-A -p-"  # Options for full Nmap scan
-export DEPTH=1
-export EXTEBNSIONS=html,php,js,txt,bak,kdbx
+export DEPTH=1 # Choose your recursion depth for Ffuf directory scanner
+export EXTENSIONS=html,php,js,txt,bak,kdbx # Choose your extensions for Ffuf directory scanner
 
 # Color codes
 RED="\e[31m"
@@ -20,7 +19,7 @@ RESET="\e[0m"
 
 # Function to display banner with blue-violet gradient
 display_banner() {
-echo -e "${MAGENTA}"
+echo -e "${BLUE}"
 cat <<'EOF'
   _    _ _______ ____   _____                 
  | |  | |__   __|  _ \ / ____|                
@@ -29,10 +28,10 @@ cat <<'EOF'
  | |  | |  | |  | |_) |____) | (_| (_| | | | |
  |_|  |_|  |_|  |____/|_____/ \___\__,_|_| |_|
                                               
-
 EOF
 echo -e "${RESET}"
-echo -e "${BLUE}HTBSCAN${RESET}"
+echo -e "${BLUE}With ❤️‍🔥 by cyber_fish${RESET}"
+echo -e "${YELLOW}Recon scanner for Hack The Box machine${RESET}
 echo ""
 }
 
@@ -101,7 +100,7 @@ main() {
 
     # Initial Nmap scan
     echo -e "${GREEN}[+] Running initial Nmap scan...${RESET}"
-    if ! nmap $NMAP_INITIAL_OPTS $IP -oA "$NAME/nmap/initial" 2>>"$LOG_FILE"; then
+    if ! nmap -sC -sV -T4 $IP -oA "$NAME/nmap/initial" 2>>"$LOG_FILE"; then
         echo -e "${RED}[-] Initial Nmap scan failed. Check $LOG_FILE for details.${RESET}"
         exit 1
     fi
@@ -195,7 +194,7 @@ main() {
         fi
     fi
 
-    # Dirsearch for directories using the full Nmap XML report
+    # Directory scan
     echo -e "${GREEN}[+] Running directory scan...${RESET}"
     ffuf -u "${URL%/}/FUZZ" -w "$WORDLIST" -t $THREADS -recursion-depth $DEPTH -e $EXTENSIONS -o "$NAME/dirscan.json" > /dev/null 2>&1
     FFUF_EXIT=$?
@@ -204,13 +203,31 @@ main() {
 	FOUND_DIRECTORY=$(jq -r '.results[] | select(.status != 0) | .input.FUZZ' "$NAME/dirscan.json")
         if [ -n "$FOUND_DIRECTORY" ]; then
             echo -e "${CYAN}[+] Directory discovered :${RESET}"
-            echo "$FOUND_DIRECTORY" | while read sub; do
-                echo -e "${YELLOW}    $DOMAIN/$sub${RESET}"
+            echo "$FOUND_DIRECTORY" | while read dir; do
+                echo -e "${YELLOW}    $DOMAIN/$dir${RESET}"
             done
         else
             echo -e "${YELLOW}[*] Sorry nothing found.${RESET}"
         fi
     fi
+
+    # Nuclei scan
+    echo -e "${GREEN}[+] Running Nuclei scan...${RESET}"
+    nuclei -u "$URL" -as -json-export "$NAME/nuclei.json" > /dev/null 2>&1
+    FFUF_EXIT=$?
+    if [ $FFUF_EXIT -eq 0 ] || [ $FFUF_EXIT -eq 2 ]; then
+        echo -e "${GREEN}[+] Nuclei scan completed. Results in $NAME/nuclei.json${RESET}"
+    FOUND_VULNERABILITY=$(jq -r '.[] | select(.info.severity as $severity | ($severity == "low" or $severity == "medium" or $severity == "high")) | "\(.info.name) - Severity: \(.info.severity)"' "$NAME/nuclei.json")
+        if [ -n "$FOUND_VULNERABILITY" ]; then
+            echo -e "${CYAN}[+] Vulnerability discovered :${RESET}"
+            echo "$FOUND_VULNERABILITY" | while read vuln; do
+                echo -e "${YELLOW}    $vuln${RESET}"
+            done
+        else
+            echo -e "${YELLOW}[*] Sorry nothing found.${RESET}"
+        fi
+    fi
+
 
     # Wait for background processes
     wait
@@ -223,7 +240,8 @@ main() {
     echo -e "${CYAN}Initial Nmap: $NAME/nmap/initial.nmap${RESET}"
     echo -e "${CYAN}Detected URL: $URL${RESET}"
     echo -e "${CYAN}Subdomains scan: $NAME/subdomains.json${RESET}"
-    echo -e "${CYAN}Directory scan: $NAME/dirscan.txt${RESET}"
+    echo -e "${CYAN}Directory scan: $NAME/dirscan.json${RESET}"
+    echo -e "${CYAN}Nuclei scan: $NAME/nuclei.json${RESET}"
     echo -e "${GREEN}[+] All scans completed.${RESET}"
 }
 
