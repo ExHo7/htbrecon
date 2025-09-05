@@ -1,80 +1,79 @@
 # HTBRecon
+An automated reconnaissance script for Hack The Box
 
-**HTBRecon** is an automated reconnaissance tool for **Hack The Box** machines (or similar environments). It performs Nmap scans, detects subdomains, directories, and vulnerabilities using Nuclei, all in a single Bash script.
+## Description
 
----
+HTBRecon is a Bash script designed to automate the reconnaissance phase during Hack The Box challenges. It performs a series of scans to identify services, open ports, subdomains, web directories, and potential vulnerabilities.
 
-## 📌 Features
-- **Nmap Scanning**: Discover open ports and services.
-- **Subdomain Detection**: Use FFUF to identify subdomains.
-- **Directory Scanning**: Search for sensitive files and directories.
-- **Vulnerability Detection**: Use Nuclei to identify vulnerabilities.
-- **Recursive Scanning**: Scan subdomains with the `-r` flag.
-- **Report Generation**: Organized results in JSON/HTML files.
+## Features
 
----
+- Initial Nmap scan to identify open ports and services.
+- Full background Nmap scan.
+- Automatic detection of HTTP/HTTPS URLs.
+- Subdomain scanning with FFUF.
+- Web directory scanning with FFUF.
+- Option to perform vulnerability scans with Nuclei (disabled by default).
+- Support for recursive scans on subdomains.
+- Conversion of Nmap results to HTML format.
+- Error handling and logging.
 
-## 📦 Installation
+## Installation
 
-### Requirements
-- **OS**: Linux (tested on Kali Linux, Parrot OS, Ubuntu).
-- **Required Tools**:
-  ```bash
-  sudo apt update && sudo apt install -y nmap ffuf nuclei jq xsltproc
-Clone the Repository
-git clone https://github.com/your-username/HTBScan.git
-cd HTBScan
-chmod +x htbscan.sh
+### Dependencies
 
-🚀 Usage
-Basic Command
-sudo ./htbscan.sh -i <IP> -n <MACHINE_NAME>
+Before using HTBRecon, ensure the following tools are installed on your system:
 
-<IP>: Target IP address.
-<MACHINE_NAME>: Output directory name (e.g., machine1).
+- `nmap`: For port and service scanning.
+- `ffuf`: For subdomain and directory fuzzing.
+- `jq`: For JSON data processing.
+- `xsltproc` (optional): For converting Nmap results to HTML.
+- `nuclei` (optional): For vulnerability scanning.
 
-Options
+### Installing Dependencies
+
+You can install the required dependencies with the following command:
+
+```bash
+sudo apt update && sudo apt install -y nmap ffuf jq xsltproc
+```
+
+To install Nuclei, follow the instructions on the Nuclei GitHub repository.
+
+Downloading the Script
+Clone the repository or download the script directly:
+```bash
+git clone https://github.com/your-username/HTBRecon.git
+cd HTBRecon
+chmod +x htb-recon.sh
+```
+
+## Usage
+Available Options
+```bash
 -i <IP> Target IP address (required).
 -n <NAME> Output directory name (required).
--r Enable recursive scans on subdomains (FFUF + Nuclei).
+-r Enable recursive scans on subdomains (can be slow).
+--nuclei Enable vulnerability scans with Nuclei.
 -h Display help.
-Examples
+```
 
-Basic Scan:
-sudo ./htbscan.sh -i 10.10.10.10 -n machine1
+### Example Usage
+To perform a basic scan on a machine with IP 10.10.10.10 and save results in a directory named machine1:
+```bash
+./htb-recon.sh -i 10.10.10.10 -n machine1
+```
 
-Recursive Scan:
-sudo ./htbscan.sh -i 10.10.10.10 -n machine1 -r
+To perform a full scan with recursion and Nuclei scans:
+```bash
+./htb-recon.sh -i 10.10.10.10 -n machine1 -r --nuclei
+```
 
+### Output
+The script generates several output files organized in the directory specified by the -n parameter. Here's a description of the main files generated:
 
-
-📂 Results Structure
-Results are saved in a directory named <MACHINE_NAME>/:
-machine1/
-├── nmap/
-│   ├── initial.nmap
-│   ├── full.xml
-│   └── full.html
-├── subdomains.json
-├── dirscan.json
-├── nuclei.json
-└── scan_errors.log
-
-🎥 Demo
-
-(Replace demo.gif with the path or URL of your video/GIF.)
-
-⚙️ Configuration
-
-Wordlists: Modify the wordlist paths in the script (WORDLIST, VHOST_WORDLIST).
-Recursion Depth: Adjust the DEPTH variable for FFUF scans.
-Extensions: Customize EXTENSIONS to target specific file types (e.g., php,html,js).
-
-
-🛠 Contributing
-Contributions are welcome!
-
-Add new features.
-Fix bugs.
-Improve documentation.
-
+nmap/initial.nmap: Results of the initial Nmap scan.
+nmap/full.html: Results of the full Nmap scan in HTML format (if xsltproc is installed).
+subdomains.json: Results of the subdomain scan.
+dirscan.json: Results of the directory scan.
+nuclei.json: Results of the vulnerability scan with Nuclei (if enabled).
+scan_errors.log: Log of any errors encountered.
