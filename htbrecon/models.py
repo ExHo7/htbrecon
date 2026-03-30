@@ -1,0 +1,197 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict
+
+
+class PortInfo(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    port: int
+    protocol: str
+    state: str
+    service: str
+    version: str = ""
+
+
+class NmapResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    ports: list[PortInfo]
+    raw_output: str
+
+
+class WhatWebResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    url: str
+    technologies: list[str]
+    raw_output: str
+
+
+class FfufResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    target: str
+    found_items: list[str]
+    raw_output: str
+
+
+class NucleiFinding(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    template_id: str
+    severity: str
+    name: str
+    matched_at: str
+
+
+class NucleiResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    target: str
+    findings: list[NucleiFinding]
+    raw_output: str
+
+
+class CveInfo(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    cve_id: str
+    severity: str
+    cvss_score: float = 0.0
+    description: str = ""
+    product: str = ""
+    is_poc: bool = False
+    is_kev: bool = False
+    is_remote: bool = False
+
+
+class VulnxResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    findings: list[CveInfo]
+    searched_terms: list[str]
+
+
+class SmbResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    shares: list[str]
+    users: list[str]
+    enum4linux_output: str
+    nxc_output: str
+
+
+class LdapResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    raw_output: str
+    base_dn: str = ""
+    entries_count: int = 0
+
+
+class ReconContext:
+    """Mutable shared state accumulated across the pipeline."""
+
+    def __init__(self, config: ReconConfig) -> None:
+        self.config = config
+        self.nmap: NmapResult | None = None
+        self.whatweb: list[WhatWebResult] = []
+        self.subdomains: list[str] = []
+        self.directories: list[FfufResult] = []
+        self.nuclei: NucleiResult | None = None
+        self.https_redirect_ports: set[int] = set()  # ports that 301→https
+        self.vulnx: VulnxResult | None = None
+        self.smb: SmbResult | None = None
+        self.ldap: LdapResult | None = None
+        self.ai_analysis: str = ""
+        self.errors: list[str] = []
+
+    @property
+    def open_ports(self) -> list[PortInfo]:
+        if self.nmap is None:
+            return []
+        return [p for p in self.nmap.ports if p.state == "open"]
+
+    @property
+    def http_ports(self) -> list[PortInfo]:
+        http_services = {"http", "https", "http-proxy", "http-alt", "https-alt"}
+        return [p for p in self.open_ports if p.service in http_services]
+
+    @property
+    def has_smb(self) -> bool:
+        return any(p.port in (139, 445) for p in self.open_ports)
+
+    @property
+    def has_ldap(self) -> bool:
+        return any(p.port in (389, 636, 3268, 3269) for p in self.open_ports)
+
+    @property
+    def all_hostnames(self) -> list[str]:
+        base = f"{self.config.name}.htb"
+        return [base, *self.subdomains]
+
+    def is_ssl(self, port: PortInfo) -> bool:
+        """Determine if a port uses SSL/TLS based on nmap service info."""
+        ssl_indicators = {"https", "https-alt", "ssl"}
+        if port.service in ssl_indicators:
+            return True
+        if port.port in (443, 8443):
+            return True
+        if "ssl" in port.version.lower() or "tls" in port.version.lower():
+            return True
+        return False
+
+    def build_url(self, hostname: str, port: PortInfo) -> str:
+        """Build the correct URL (http/https) for a given hostname and port."""
+        scheme = "https" if self.is_ssl(port) else "http"
+        if (scheme == "http" and port.port == 80) or (scheme == "https" and port.port == 443):
+            return f"{scheme}://{hostname}"
+        return f"{scheme}://{hostname}:{port.port}"
+
+    def web_urls(self, hostname: str | None = None) -> list[tuple[PortInfo, str]]:
+        """Return (port, url) pairs for all HTTP ports and a given hostname.
+
+        Ports that redirect to HTTPS are replaced by https://hostname
+        (standard port 443) to avoid scanning http→https redirect loops.
+        Deduplicates URLs so https://host isn't scanned twice.
+        """
+        host = hostname or self.config.hostname
+        seen_urls: set[str] = set()
+        result: list[tuple[PortInfo, str]] = []
+        for p in self.http_ports:
+            if p.port in self.https_redirect_ports:
+                url = f"https://{host}"
+            else:
+                url = self.build_url(host, p)
+            if url not in seen_urls:
+                seen_urls.add(url)
+                result.append((p, url))
+        return result
+
+
+class ReconConfig(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    ip: str
+    name: str
+    credentials: tuple[str, str] | None = None
+    skip_ai: bool = False
+    debug: bool = False
+    project_dir: Path = Path(".")
+    subdomain_wordlist: Path = Path(
+        "/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
+    )
+    directory_wordlist: Path = Path(
+        "/usr/share/seclists/Discovery/Web-Content/raft-small-directories-lowercase.txt"
+    )
+
+    @property
+    def base_url(self) -> str:
+        return f"http://{self.name}.htb"
+
+    @property
+    def hostname(self) -> str:
+        return f"{self.name}.htb"
