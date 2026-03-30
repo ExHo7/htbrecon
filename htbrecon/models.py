@@ -130,8 +130,7 @@ class ReconContext:
 
     @property
     def all_hostnames(self) -> list[str]:
-        base = f"{self.config.name}.htb"
-        return [base, *self.subdomains]
+        return [self.config.hostname, *self.subdomains]
 
     def is_ssl(self, port: PortInfo) -> bool:
         """Determine if a port uses SSL/TLS based on nmap service info."""
@@ -177,6 +176,7 @@ class ReconConfig(BaseModel):
 
     ip: str
     name: str
+    domain: str = "htb"
     credentials: tuple[str, str] | None = None
     skip_ai: bool = False
     debug: bool = False
@@ -190,8 +190,8 @@ class ReconConfig(BaseModel):
 
     @property
     def base_url(self) -> str:
-        return f"http://{self.name}.htb"
+        return f"http://{self.name}.{self.domain}"
 
     @property
     def hostname(self) -> str:
-        return f"{self.name}.htb"
+        return f"{self.name}.{self.domain}"

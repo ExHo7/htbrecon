@@ -20,6 +20,7 @@ app = typer.Typer(
 def run(
     ip: str = typer.Option(..., "-i", help="Target IP address"),
     name: str = typer.Option(..., "-n", help="Machine name"),
+    domain: str = typer.Option("htb", "-d", "--domain", help="TLD / domain suffix (e.g. htb, local, thm)"),
     credentials: Optional[str] = typer.Option(
         None, "--credentials", help="Credentials in user:password format"
     ),
@@ -31,6 +32,7 @@ def run(
         config = build_config(
             ip=ip,
             name=name,
+            domain=domain,
             credentials=credentials,
             skip_ai=skip_ai,
             debug=debug,

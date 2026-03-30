@@ -6,6 +6,7 @@ from htbrecon.models import ReconConfig
 def build_config(
     ip: str,
     name: str,
+    domain: str = "htb",
     credentials: str | None = None,
     skip_ai: bool = False,
     debug: bool = False,
@@ -13,6 +14,7 @@ def build_config(
 ) -> ReconConfig:
     """Build a ReconConfig from CLI arguments."""
     name = name.lower().strip()
+    domain = domain.lower().strip().lstrip(".")
     if base_dir is None:
         base_dir = Path.cwd()
     project_dir = base_dir / "results" / name
@@ -27,6 +29,7 @@ def build_config(
     return ReconConfig(
         ip=ip,
         name=name,
+        domain=domain,
         credentials=creds,
         skip_ai=skip_ai,
         debug=debug,
