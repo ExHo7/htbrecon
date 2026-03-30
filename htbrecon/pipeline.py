@@ -24,7 +24,7 @@ def _setup_dirs(config: ReconConfig) -> None:
 
 
 async def run_pipeline(config: ReconConfig) -> ReconContext:
-    """Execute the full reconnaissance pipeline."""
+    """Execute the fast reconnaissance pipeline."""
     ctx = ReconContext(config)
 
     setup_logging(config.project_dir / "htbrecon.log", debug=config.debug)
@@ -39,7 +39,7 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
 
     # ── Phase 2: Port Discovery ─────────────────────────────────
     print_phase("Port Discovery")
-    with console.status("[bold cyan]Running nmap full port scan...", spinner="dots"):
+    with console.status("[bold cyan]Running nmap fast port scan...", spinner="dots"):
         await nmap.run(ctx)
 
     if not ctx.open_ports:
