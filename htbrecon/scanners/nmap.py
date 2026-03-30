@@ -9,20 +9,39 @@ from htbrecon.models import NmapResult, PortInfo, ReconContext
 PORT_RE = re.compile(
     r"^(\d+)/(tcp|udp)\s+(open|filtered|closed)\s+(\S+)\s*(.*?)$", re.MULTILINE
 )
+PORT_EMBEDDED_RE = re.compile(
+    r"^(\d+)/(tcp|udp)\s+(open|filtered|closed)\s+(\S+)\s*(.*)", re.IGNORECASE
+)
 
 
 def _parse_nmap_output(output: str) -> list[PortInfo]:
     ports: list[PortInfo] = []
     for m in PORT_RE.finditer(output):
-        ports.append(
-            PortInfo(
+        version = m.group(5).strip()
+        embedded = PORT_EMBEDDED_RE.match(version)
+        if embedded:
+            ports.append(PortInfo(
                 port=int(m.group(1)),
                 protocol=m.group(2),
                 state=m.group(3),
                 service=m.group(4),
-                version=m.group(5).strip(),
-            )
-        )
+                version="",
+            ))
+            ports.append(PortInfo(
+                port=int(embedded.group(1)),
+                protocol=embedded.group(2),
+                state=embedded.group(3),
+                service=embedded.group(4),
+                version=embedded.group(5).strip(),
+            ))
+        else:
+            ports.append(PortInfo(
+                port=int(m.group(1)),
+                protocol=m.group(2),
+                state=m.group(3),
+                service=m.group(4),
+                version=version,
+            ))
     return ports
 
 

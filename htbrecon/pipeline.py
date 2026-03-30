@@ -6,12 +6,14 @@ from htbrecon.console import console, print_error, print_phase, print_success, p
 from htbrecon.hosts import add_host
 from htbrecon.models import ReconConfig, ReconContext
 from htbrecon.scanners import (
+    bloodhound,
     ffuf_dirs,
     ffuf_subdomains,
     ldap,
     nmap,
     nuclei,
     smb,
+    spray,
     vulnx,
     whatweb,
 )
@@ -68,6 +70,26 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
                 print_error(f"{name}: {result}")
     else:
         print_success("No services to enumerate in this phase")
+
+    # ── Phase 3b: Active Directory (BloodHound) ─────────────────
+    if ctx.has_ldap and ctx.config.credentials:
+        print_phase("Active Directory Enumeration")
+        with console.status("[bold cyan]Collecting BloodHound data...", spinner="dots"):
+            try:
+                await bloodhound.run(ctx)
+            except Exception as e:
+                ctx.errors.append(f"BloodHound error: {e}")
+                print_error(f"BloodHound: {e}")
+
+    # ── Phase 3c: Password Spray ────────────────────────────────
+    if ctx.has_smb:
+        print_phase("Password Spray")
+        with console.status("[bold cyan]Testing username=password...", spinner="dots"):
+            try:
+                await spray.run(ctx)
+            except Exception as e:
+                ctx.errors.append(f"Spray error: {e}")
+                print_error(f"Spray: {e}")
 
     # ── Phase 4: Web Recon ──────────────────────────────────────
     if ctx.http_ports:

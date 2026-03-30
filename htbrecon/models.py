@@ -75,13 +75,41 @@ class VulnxResult(BaseModel):
     searched_terms: list[str]
 
 
+class SprayResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    lockout_threshold: int = 0  # 0 = no lockout policy
+    users_tested: int = 0
+    valid_creds: list[str] = []  # "user:password" format
+    raw_output: str = ""
+
+
 class SmbResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     shares: list[str]
     users: list[str]
+    ntlm_reflection_vulnerable: bool = False
+    av_products: list[str] = []
+    nopac_vulnerable: bool = False
     enum4linux_output: str
     nxc_output: str
+
+
+class BloodHoundResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    ad_domain: str = ""
+    func_level: str = ""
+    users_count: int = 0
+    groups_count: int = 0
+    computers_count: int = 0
+    admin_users: list[str] = []
+    spn_users: list[str] = []
+    asrep_users: list[str] = []
+    unconstrained_users: list[str] = []
+    dcsync_principals: list[str] = []
+    summary_text: str = ""
 
 
 class LdapResult(BaseModel):
@@ -90,6 +118,11 @@ class LdapResult(BaseModel):
     raw_output: str
     base_dn: str = ""
     entries_count: int = 0
+    asreproast_hashes: list[str] = []
+    kerberoast_hashes: list[str] = []
+    adcs_cas: list[str] = []
+    adcs_vulns: list[str] = []
+    badsuccessor_dmsas: list[str] = []
 
 
 class ReconContext:
@@ -106,6 +139,8 @@ class ReconContext:
         self.vulnx: VulnxResult | None = None
         self.smb: SmbResult | None = None
         self.ldap: LdapResult | None = None
+        self.bloodhound: BloodHoundResult | None = None
+        self.spray: SprayResult | None = None
         self.ai_analysis: str = ""
         self.errors: list[str] = []
 

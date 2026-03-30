@@ -45,11 +45,35 @@ def _build_prompt(ctx: ReconContext) -> str:
         if ctx.smb.shares:
             sections.append(f"SMB shares: {', '.join(ctx.smb.shares)}")
         if ctx.smb.users:
-            sections.append(f"SMB users: {', '.join(ctx.smb.users)}")
+            sections.append(f"SMB users ({len(ctx.smb.users)}): {', '.join(ctx.smb.users)}")
+        smb_vulns = []
+        if ctx.smb.ntlm_reflection_vulnerable:
+            smb_vulns.append("NTLM Reflection (CVE-2025-33073)")
+        if ctx.smb.nopac_vulnerable:
+            smb_vulns.append("NoPac (CVE-2021-42278/42287)")
+        if smb_vulns:
+            sections.append(f"SMB vulnerabilities: {', '.join(smb_vulns)}")
+        if ctx.smb.av_products:
+            sections.append(f"AV/EDR on target: {', '.join(ctx.smb.av_products)}")
+
+    if ctx.spray:
+        if ctx.spray.valid_creds:
+            sections.append(f"Valid credentials from spray: {', '.join(ctx.spray.valid_creds)}")
+        else:
+            sections.append(f"Password spray: no matches ({ctx.spray.users_tested} users tested, username=password)")
 
     if ctx.ldap:
         sections.append(f"LDAP base DN: {ctx.ldap.base_dn}")
         sections.append(f"LDAP entries: {ctx.ldap.entries_count}")
+        if ctx.ldap.adcs_vulns:
+            sections.append(f"ADCS vulnerabilities: {', '.join(ctx.ldap.adcs_vulns)}")
+        if ctx.ldap.asreproast_hashes:
+            sections.append(f"AS-REP Roastable hashes found: {len(ctx.ldap.asreproast_hashes)}")
+        if ctx.ldap.kerberoast_hashes:
+            sections.append(f"Kerberoastable hashes found: {len(ctx.ldap.kerberoast_hashes)}")
+
+    if ctx.bloodhound and ctx.bloodhound.summary_text:
+        sections.append(f"BloodHound AD enumeration:\n{ctx.bloodhound.summary_text}")
 
     if ctx.config.credentials:
         sections.append(f"Credentials available: {ctx.config.credentials[0]}:***")
@@ -58,15 +82,15 @@ def _build_prompt(ctx: ReconContext) -> str:
 
 
 SYSTEM_PROMPT = """\
-You are an expert penetration tester analyzing reconnaissance data from a Hack The Box machine.
+You are an expert penetration tester analyzing reconnaissance data from a Hack The Box or CTF machine.
 
 Based on the provided scan results, you must:
 1. Identify the most likely attack vectors, ordered by probability of success
-2. Suggest specific exploits, CVEs, or techniques to investigate
-3. Recommend concrete next manual steps to find the initial foothold
-4. Highlight any interesting or unusual findings that deserve attention
+2. Suggest specific exploits, CVEs, or AD attack techniques to investigate (Kerberoasting, ASREPRoast, DCSync, ESC1/ESC8, BadSuccessor, etc.)
+3. Recommend concrete next manual steps for initial foothold or privilege escalation
+4. Highlight any high-value targets from BloodHound data (admin users, delegation, DCSync rights)
 
-Be specific and actionable. Reference port numbers, service versions, and discovered paths.
+Be specific and actionable. Reference port numbers, service versions, user names, and ADCS vulnerabilities.
 Format your response in Markdown with clear sections."""
 
 

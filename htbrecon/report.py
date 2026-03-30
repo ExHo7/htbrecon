@@ -9,7 +9,7 @@ from htbrecon.models import ReconContext
 
 REPORT_TEMPLATE = Template(
     """\
-# Reconnaissance Report: {{ config.name }}.htb
+# Reconnaissance Report: {{ config.hostname }}
 
 **Target:** {{ config.ip }} ({{ config.hostname }})
 **Date:** {{ date }}
@@ -119,7 +119,7 @@ No vulnerabilities found by Nuclei.
 No shares found.
 {% endif %}
 
-### Users
+### Users ({{ smb.users | length }})
 {% if smb.users %}
 {% for u in smb.users %}
 - {{ u }}
@@ -127,8 +127,31 @@ No shares found.
 {% else %}
 No users found.
 {% endif %}
+
+### Vulnerability Checks
+- **NTLM Reflection (CVE-2025-33073):** {{ "**VULNERABLE**" if smb.ntlm_reflection_vulnerable else "Not vulnerable" }}
+- **NoPac (CVE-2021-42278/42287):** {{ "**VULNERABLE**" if smb.nopac_vulnerable else "Not vulnerable" }}
+- **AV/EDR:** {{ smb.av_products | join(", ") if smb.av_products else "None detected" }}
 {% else %}
 SMB enumeration not performed (no SMB ports detected).
+{% endif %}
+
+---
+
+## Password Spray
+
+{% if spray and spray.valid_creds %}
+**Valid credentials found ({{ spray.valid_creds | length }}):**
+{% for cred in spray.valid_creds %}
+- `{{ cred }}`
+{% endfor %}
+
+*(Lockout threshold: {{ spray.lockout_threshold if spray.lockout_threshold > 0 else "disabled" }})*
+{% elif spray %}
+No valid credentials found via username=password spray ({{ spray.users_tested }} accounts tested).
+*(Lockout threshold: {{ spray.lockout_threshold if spray.lockout_threshold > 0 else "disabled" }})*
+{% else %}
+Password spray not performed.
 {% endif %}
 
 ---
@@ -138,8 +161,97 @@ SMB enumeration not performed (no SMB ports detected).
 {% if ldap %}
 **Base DN:** {{ ldap.base_dn or "N/A" }}
 **Entries:** {{ ldap.entries_count }}
+
+{% if ldap.adcs_cas %}
+### ADCS Certificate Authorities
+{% for ca in ldap.adcs_cas %}
+- {{ ca }}
+{% endfor %}
+{% endif %}
+
+{% if ldap.adcs_vulns %}
+### ADCS Vulnerabilities
+{% for v in ldap.adcs_vulns %}
+- **{{ v }}**
+{% endfor %}
+{% endif %}
+
+{% if ldap.asreproast_hashes %}
+### AS-REP Roastable Hashes ({{ ldap.asreproast_hashes | length }})
+```
+{% for h in ldap.asreproast_hashes %}
+{{ h }}
+{% endfor %}
+```
+{% endif %}
+
+{% if ldap.kerberoast_hashes %}
+### Kerberoastable Hashes ({{ ldap.kerberoast_hashes | length }})
+```
+{% for h in ldap.kerberoast_hashes %}
+{{ h }}
+{% endfor %}
+```
+{% endif %}
+
+{% if ldap.badsuccessor_dmsas %}
+### BadSuccessor — dMSA Objects
+{% for d in ldap.badsuccessor_dmsas %}
+- {{ d }}
+{% endfor %}
+{% endif %}
+
 {% else %}
 LDAP enumeration not performed (no LDAP ports detected).
+{% endif %}
+
+---
+
+## Active Directory — BloodHound
+
+{% if bloodhound and bloodhound.users_count > 0 %}
+**Domain:** {{ bloodhound.ad_domain }} (Functional Level: {{ bloodhound.func_level }})
+**Objects:** {{ bloodhound.users_count }} users · {{ bloodhound.groups_count }} groups · {{ bloodhound.computers_count }} computers
+
+{% if bloodhound.admin_users %}
+### Admin Users (admincount=1)
+{% for u in bloodhound.admin_users %}
+- {{ u }}
+{% endfor %}
+{% endif %}
+
+{% if bloodhound.spn_users %}
+### Kerberoastable Accounts (SPN)
+{% for u in bloodhound.spn_users %}
+- {{ u }}
+{% endfor %}
+{% endif %}
+
+{% if bloodhound.asrep_users %}
+### ASREPRoastable Accounts (no preauth)
+{% for u in bloodhound.asrep_users %}
+- `{{ u }}`
+{% endfor %}
+{% endif %}
+
+{% if bloodhound.unconstrained_users %}
+### Unconstrained Delegation
+{% for u in bloodhound.unconstrained_users %}
+- {{ u }}
+{% endfor %}
+{% endif %}
+
+{% if bloodhound.dcsync_principals %}
+### DCSync Capable (GetChanges + GetChangesAll)
+{% for p in bloodhound.dcsync_principals %}
+- {{ p }}
+{% endfor %}
+{% endif %}
+
+{% elif bloodhound %}
+BloodHound collection ran but returned no data — check `bloodhound/bloodhound.log`.
+{% else %}
+BloodHound not run (no credentials provided or no LDAP detected).
 {% endif %}
 
 ---
@@ -183,6 +295,8 @@ def generate(ctx: ReconContext) -> Path:
         nuclei=ctx.nuclei,
         smb=ctx.smb,
         ldap=ctx.ldap,
+        bloodhound=ctx.bloodhound,
+        spray=ctx.spray,
         ai_analysis=ctx.ai_analysis,
         errors=ctx.errors,
     )
