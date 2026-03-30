@@ -28,6 +28,49 @@ def _nxc_msg(output: str) -> list[str]:
     return msgs
 
 
+_GENERIC_DESCRIPTIONS = frozenset({
+    "built-in account for administering",
+    "built-in account for guest",
+    "key distribution center",
+})
+
+
+def _parse_users(output: str) -> list[str]:
+    """Extract sAMAccountNames, excluding computer accounts (ending in $)."""
+    return sorted(
+        m.group(1).strip()
+        for m in re.finditer(r"sAMAccountName:\s+(.+)", output)
+        if not m.group(1).strip().endswith("$")
+    )
+
+
+def _parse_descriptions(output: str) -> list[str]:
+    """Return 'user: description' pairs, skipping generic built-in descriptions."""
+    result: list[str] = []
+    current_user = ""
+    for line in output.splitlines():
+        if m := re.match(r"sAMAccountName:\s+(.+)", line):
+            current_user = m.group(1).strip()
+        elif m := re.match(r"description:\s+(.+)", line):
+            desc = m.group(1).strip()
+            if current_user and not any(g in desc.lower() for g in _GENERIC_DESCRIPTIONS):
+                result.append(f"{current_user}: {desc}")
+    return result
+
+
+def _parse_group_members(output: str) -> list[str]:
+    """Extract CN values from member: CN=xxx,... lines, skip foreign security principals."""
+    return sorted(
+        m.group(1).strip()
+        for m in re.finditer(r"member:\s+CN=([^,]+)", output)
+        if not m.group(1).strip().startswith("S-1-")
+    )
+
+
+def _parse_trusts(output: str) -> list[str]:
+    return [m.group(1).strip() for m in re.finditer(r"trustPartner:\s+(.+)", output)]
+
+
 def _parse_asreproast(content: str) -> list[str]:
     return [l.strip() for l in content.splitlines() if l.strip().startswith("$krb5asrep")]
 
@@ -89,18 +132,59 @@ async def run(ctx: ReconContext) -> None:
 
     print_success(f"LDAP base DN: {base_dn}")
 
-    # Step 2: full ldapsearch enumeration
-    out_file = out_dir / "ldapsearch.txt"
-    enum_cmd = [
-        "ldapsearch", "-x", "-H", f"ldap://{config.ip}", "-b", base_dn,
-    ]
+    # Step 2: targeted ldapsearch queries (anonymous fallback for entry count only)
+    ldap_users: list[str] = []
+    domain_admins: list[str] = []
+    descriptions: list[str] = []
+    unconstrained_delegation: list[str] = []
+    domain_trusts: list[str] = []
+    entries_count = 0
+    enum_raw = ""
+
     if config.credentials:
-        enum_cmd.extend(["-D", config.credentials[0], "-w", config.credentials[1]])
+        user_cred, password = config.credentials
+        domain = re.sub(r"DC=([^,]+)", r"\1", base_dn, flags=re.IGNORECASE).replace(",", ".").lower()
+        bind_dn = f"{user_cred}@{domain}"
+        ldap_base = ["ldapsearch", "-x", "-H", f"ldap://{config.ip}", "-D", bind_dn, "-w", password, "-b", base_dn]
 
-    enum_result = await executor.run(enum_cmd, timeout=60, output_file=out_file)
+        q_users  = "(objectClass=user)"
+        q_da     = "(&(objectClass=group)(|(cn=Domain Admins)(cn=Enterprise Admins)(cn=Schema Admins)))"
+        q_deleg  = "(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=1048576))"
+        q_trusts = "(objectClass=trustedDomain)"
 
-    ldap_access_denied = any(p in enum_result.stdout for p in _LDAP_DENIED)
-    entries_count = len(re.findall(r"^dn:\s+", enum_result.stdout, re.MULTILINE))
+        ldap_results = await asyncio.gather(
+            executor.run([*ldap_base, q_users, "sAMAccountName", "description", "userAccountControl"],
+                         timeout=60, output_file=out_dir / "ldap_users.txt"),
+            executor.run([*ldap_base, q_da, "sAMAccountName", "member"],
+                         timeout=30, output_file=out_dir / "ldap_da.txt"),
+            executor.run([*ldap_base, q_deleg, "sAMAccountName"],
+                         timeout=30, output_file=out_dir / "ldap_delegation.txt"),
+            executor.run([*ldap_base, q_trusts, "trustPartner"],
+                         timeout=30, output_file=out_dir / "ldap_trusts.txt"),
+            return_exceptions=True,
+        )
+        users_r, da_r, deleg_r, trust_r = ldap_results
+
+        if not isinstance(users_r, Exception):
+            enum_raw = users_r.stdout
+            ldap_users = _parse_users(users_r.stdout)
+            descriptions = _parse_descriptions(users_r.stdout)
+            entries_count = len(re.findall(r"^dn:\s+", users_r.stdout, re.MULTILINE))
+        if not isinstance(da_r, Exception):
+            domain_admins = _parse_group_members(da_r.stdout)
+        if not isinstance(deleg_r, Exception):
+            unconstrained_delegation = _parse_users(deleg_r.stdout)
+        if not isinstance(trust_r, Exception):
+            domain_trusts = _parse_trusts(trust_r.stdout)
+    else:
+        # Anonymous: full dump just to count entries
+        anon_result = await executor.run(
+            ["ldapsearch", "-x", "-H", f"ldap://{config.ip}", "-b", base_dn],
+            timeout=60, output_file=out_dir / "ldapsearch.txt",
+        )
+        enum_raw = anon_result.stdout
+        ldap_access_denied = any(p in anon_result.stdout for p in _LDAP_DENIED)
+        entries_count = len(re.findall(r"^dn:\s+", anon_result.stdout, re.MULTILINE))
 
     # Step 3: nxc credential-based enumeration (parallel)
     asreproast_hashes: list[str] = []
@@ -160,9 +244,14 @@ async def run(ctx: ReconContext) -> None:
 
     # Assemble result
     ctx.ldap = LdapResult(
-        raw_output=enum_result.stdout,
+        raw_output=enum_raw,
         base_dn=base_dn,
         entries_count=entries_count,
+        users=ldap_users,
+        domain_admins=domain_admins,
+        descriptions=descriptions,
+        unconstrained_delegation=unconstrained_delegation,
+        domain_trusts=domain_trusts,
         asreproast_hashes=asreproast_hashes,
         kerberoast_hashes=kerberoast_hashes,
         adcs_cas=adcs_cas,
@@ -171,15 +260,25 @@ async def run(ctx: ReconContext) -> None:
     )
 
     # Print ldapsearch results
-    if entries_count > 0:
+    if ldap_users:
+        print_success(f"LDAP: {len(ldap_users)} users, {entries_count} total entries")
+    elif entries_count > 0:
         print_success(f"LDAP: {entries_count} entries enumerated")
-        for line in enum_result.stdout.splitlines():
-            if any(kw in line.lower() for kw in ["samaccountname:", "serviceprincipalname:", "memberof:"]):
-                print_finding("info", line.strip())
-    elif ldap_access_denied:
+    elif not config.credentials and any(p in enum_raw for p in _LDAP_DENIED):
         print_finding("warn", "LDAP: access denied (anonymous bind insufficient)")
     else:
         print_info("LDAP: no entries found")
+
+    if domain_admins:
+        print_finding("high", f"Domain Admins: {', '.join(domain_admins)}")
+    if unconstrained_delegation:
+        print_finding("high", f"Unconstrained delegation: {', '.join(unconstrained_delegation)}")
+    if descriptions:
+        print_finding("warn", f"Descriptions ({len(descriptions)} accounts — check for embedded creds)")
+        for d in descriptions:
+            print_finding("info", d)
+    if domain_trusts:
+        print_finding("info", f"Domain trusts: {', '.join(domain_trusts)}")
 
     # Print nxc findings
     if asreproast_hashes:

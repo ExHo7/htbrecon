@@ -162,6 +162,41 @@ Password spray not performed.
 **Base DN:** {{ ldap.base_dn or "N/A" }}
 **Entries:** {{ ldap.entries_count }}
 
+{% if ldap.users %}
+### Users ({{ ldap.users | length }})
+{% for u in ldap.users %}
+- {{ u }}
+{% endfor %}
+{% endif %}
+
+{% if ldap.domain_admins %}
+### Domain / Enterprise Admins
+{% for u in ldap.domain_admins %}
+- **{{ u }}**
+{% endfor %}
+{% endif %}
+
+{% if ldap.unconstrained_delegation %}
+### Unconstrained Delegation
+{% for u in ldap.unconstrained_delegation %}
+- {{ u }}
+{% endfor %}
+{% endif %}
+
+{% if ldap.descriptions %}
+### Account Descriptions (potential credentials)
+{% for d in ldap.descriptions %}
+- `{{ d }}`
+{% endfor %}
+{% endif %}
+
+{% if ldap.domain_trusts %}
+### Domain Trusts
+{% for t in ldap.domain_trusts %}
+- {{ t }}
+{% endfor %}
+{% endif %}
+
 {% if ldap.adcs_cas %}
 ### ADCS Certificate Authorities
 {% for ca in ldap.adcs_cas %}

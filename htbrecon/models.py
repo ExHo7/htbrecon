@@ -118,6 +118,11 @@ class LdapResult(BaseModel):
     raw_output: str
     base_dn: str = ""
     entries_count: int = 0
+    users: list[str] = []
+    domain_admins: list[str] = []
+    descriptions: list[str] = []             # "user: description" for non-generic entries
+    unconstrained_delegation: list[str] = []
+    domain_trusts: list[str] = []
     asreproast_hashes: list[str] = []
     kerberoast_hashes: list[str] = []
     adcs_cas: list[str] = []

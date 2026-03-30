@@ -65,6 +65,14 @@ def _build_prompt(ctx: ReconContext) -> str:
     if ctx.ldap:
         sections.append(f"LDAP base DN: {ctx.ldap.base_dn}")
         sections.append(f"LDAP entries: {ctx.ldap.entries_count}")
+        if ctx.ldap.domain_admins:
+            sections.append(f"Domain Admins: {', '.join(ctx.ldap.domain_admins)}")
+        if ctx.ldap.unconstrained_delegation:
+            sections.append(f"Unconstrained delegation: {', '.join(ctx.ldap.unconstrained_delegation)}")
+        if ctx.ldap.descriptions:
+            sections.append(f"Account descriptions (check for creds): {'; '.join(ctx.ldap.descriptions[:10])}")
+        if ctx.ldap.domain_trusts:
+            sections.append(f"Domain trusts: {', '.join(ctx.ldap.domain_trusts)}")
         if ctx.ldap.adcs_vulns:
             sections.append(f"ADCS vulnerabilities: {', '.join(ctx.ldap.adcs_vulns)}")
         if ctx.ldap.asreproast_hashes:
