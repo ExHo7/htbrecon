@@ -2,3 +2,4 @@
 project.md
 results/*
 htbrecon/__pycache__
+htbrecon/scanners/__pycache__
