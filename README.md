@@ -44,7 +44,7 @@
 Inside your Exegol container:
 
 ```bash
-git clone https://github.com/youruser/HTBRecon /opt/HTBRecon
+git clone https://github.com/ExHo7/HTBRecon.git /opt/HTBRecon
 cd /opt/HTBRecon
 pip install -e .
 ```
