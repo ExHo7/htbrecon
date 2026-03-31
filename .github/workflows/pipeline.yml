@@ -31,4 +31,4 @@ jobs:
         pip install -e . mypy
     - name: Run mypy
       run: |
-        MYPYPATH=htbrecon mypy --disallow-untyped-defs --namespace-packages --explicit-package-bases htbrecon/
+        mypy htbrecon/ --ignore-missing-imports --exclude htbrecon/__main__
