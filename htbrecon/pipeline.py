@@ -48,7 +48,7 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
 
     # ── Phase 2: Port Discovery ─────────────────────────────────
     print_phase("Port Discovery")
-    with console.status("[bold cyan]Running nmap fast port scan...", spinner="dots"):
+    with console.status("[bold cyan]Running deep port scan...🧉", spinner="dots"):
         await nmap.run(ctx)
 
     if not ctx.open_ports:
@@ -180,7 +180,7 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
         phase4_tasks.append(("EyeWitness", eyewitness.run(ctx)))
 
         names = ", ".join(name for name, _ in phase4_tasks)
-        with console.status(f"[bold cyan]Running: {names}...", spinner="dots"):
+        with console.status(f"[bold cyan]Running: {names}...🍹", spinner="dots"):
             results = await asyncio.gather(
                 *(task for _, task in phase4_tasks), return_exceptions=True
             )
@@ -211,7 +211,7 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
     # ── Phase 5: AI Analysis ────────────────────────────────────
     if not config.skip_ai:
         print_phase("AI Analysis")
-        with console.status("[bold cyan]Analyzing findings with Claude...", spinner="dots"):
+        with console.status("[bold cyan]Analyzing findings with Claude...🤖", spinner="dots"):
             from htbrecon.ai import analyze
 
             try:
