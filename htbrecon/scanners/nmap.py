@@ -56,7 +56,6 @@ async def run(ctx: ReconContext) -> None:
 
     cmd = [
         "nmap",
-        "-sC",
         "-F",
         "-sV",
         "-Pn",

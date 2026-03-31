@@ -24,6 +24,30 @@ jobs:
     - name: Run Ruff
       run: ruff check htbrecon/
 
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@main
+      - name: Run Safety CLI to check for vulnerabilities
+        uses: pyupio/safety-action@v1
+        with:
+          api-key: ${{ secrets.SAFETY_API_KEY }}
+
+  safety:
+    runs-on: ubuntu-latest
+    name: Dependency vulnerability check
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+    - name: Install Dependencies
+      run: pip install -e .
+    - uses: pyupio/safety-action@v1
+      with:
+        api-key: ${{ secrets.SAFETY_API_KEY }}
+
   mypy:
     runs-on: ubuntu-latest
     name: Type check with mypy

@@ -22,24 +22,24 @@ async def run(ctx: ReconContext) -> None:
     if not urls:
         return
 
-    # Write URLs file outside the EyeWitness output directory — EyeWitness
-    # may clear its output dir on startup, deleting the file before reading it.
-    urls_file = (config.project_dir / "eyewitness_urls.txt").resolve()
+    # urls.txt lives in eyewitness/ ; screenshots go into eyewitness/screenshots/
+    # so EyeWitness only clears the screenshots subdir, not the urls file.
+    urls_file = (out_dir / "urls.txt").resolve()
+    screenshots_dir = (out_dir / "screenshots").resolve()
     urls_file.write_text("\n".join(urls), encoding="utf-8")
     print_info(f"EyeWitness: screenshotting {len(urls)} URL(s)...")
 
-    out_dir_abs = out_dir.resolve()
     cmd = [
         "eyewitness",
         "--web",
         "-f", str(urls_file),
-        "-d", str(out_dir_abs),
+        "-d", str(screenshots_dir),
         "--no-prompt",
         "--timeout", "20",
         "--threads", "2",
     ]
 
-    result = await executor.run(cmd, timeout=300, output_file=out_dir_abs / "eyewitness_stdout.txt")
+    result = await executor.run(cmd, timeout=300, output_file=out_dir / "eyewitness_stdout.txt")
 
     if result.returncode == 127:
         ctx.errors.append("EyeWitness not found — skipping web screenshots")
@@ -50,10 +50,10 @@ async def run(ctx: ReconContext) -> None:
 
     ctx.eyewitness = EyeWitnessResult(
         screenshots_count=screenshots_count,
-        output_dir=str(out_dir_abs),
+        output_dir=str(screenshots_dir),
     )
 
     if screenshots_count > 0:
-        print_success(f"EyeWitness: {screenshots_count} screenshot(s) saved to {out_dir}")
+        print_success(f"EyeWitness: {screenshots_count} screenshot(s) saved to {screenshots_dir}")
     else:
         print_info("EyeWitness: no screenshots produced")
