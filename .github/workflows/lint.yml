@@ -8,10 +8,10 @@ jobs:
     name: Lint with Ruff
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.9
+    - name: Set up Python 3.10
       uses: actions/setup-python@v5
       with:
-        python-version: 3.9
+        python-version: 3.10
     - name: Install Ruff
       run: pip install ruff
     - name: Run Ruff
@@ -22,10 +22,10 @@ jobs:
     name: Type check with mypy
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.9
+    - name: Set up Python 3.10
       uses: actions/setup-python@v5
       with:
-        python-version: 3.9
+        python-version: 3.10
     - name: Install Dependencies
       run: |
         pip install -e .[dev]
