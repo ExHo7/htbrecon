@@ -28,7 +28,7 @@ jobs:
         python-version: 3.9
     - name: Install Dependencies
       run: |
-        pip install -r requirements.txt
+        pip install -e .[dev]
     - name: Run mypy
       run: |
         MYPYPATH=htbrecon mypy --disallow-untyped-defs --namespace-packages --explicit-package-bases htbrecon/
