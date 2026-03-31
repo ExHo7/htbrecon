@@ -128,19 +128,25 @@ async def run(ctx: ReconContext) -> None:
     nxc_shares_result = results[1]
     nxc_users_result = results[2] if config.credentials else None
 
-    if isinstance(enum_result, Exception) or enum_result.returncode == 127:
+    if isinstance(enum_result, BaseException):
+        ctx.errors.append("enum4linux-ng not found")
+        enum_output = ""
+    elif enum_result.returncode == 127:
         ctx.errors.append("enum4linux-ng not found")
         enum_output = ""
     else:
         enum_output = enum_result.stdout
 
-    if isinstance(nxc_shares_result, Exception) or nxc_shares_result.returncode == 127:
+    if isinstance(nxc_shares_result, BaseException):
+        ctx.errors.append("nxc (netexec) not found")
+        nxc_output = ""
+    elif nxc_shares_result.returncode == 127:
         ctx.errors.append("nxc (netexec) not found")
         nxc_output = ""
     else:
         nxc_output = nxc_shares_result.stdout
 
-    if nxc_users_result and not isinstance(nxc_users_result, Exception):
+    if nxc_users_result and not isinstance(nxc_users_result, BaseException):
         nxc_users_output = nxc_users_result.stdout
 
     shares = _parse_shares(nxc_output)
@@ -169,11 +175,11 @@ async def run(ctx: ReconContext) -> None:
             return_exceptions=True,
         )
         ntlm_r, av_r, nopac_r = vuln_results
-        if not isinstance(ntlm_r, Exception):
+        if not isinstance(ntlm_r, BaseException):
             ntlm_vuln = _parse_ntlm_reflection(ntlm_r.stdout)
-        if not isinstance(av_r, Exception):
+        if not isinstance(av_r, BaseException):
             av_products = _parse_enum_av(av_r.stdout)
-        if not isinstance(nopac_r, Exception):
+        if not isinstance(nopac_r, BaseException):
             nopac_vuln = _parse_nopac(nopac_r.stdout)
 
     # RID brute (only without credentials — enumerates users via RID cycling)

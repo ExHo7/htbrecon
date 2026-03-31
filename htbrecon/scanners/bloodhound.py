@@ -122,6 +122,7 @@ async def run(ctx: ReconContext) -> None:
         print_info("BloodHound: skipped (could not derive AD domain from base DN)")
         return
 
+    assert config.credentials is not None
     user, password = config.credentials
 
     cmd = [

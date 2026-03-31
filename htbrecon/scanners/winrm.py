@@ -55,6 +55,6 @@ async def run(ctx: ReconContext) -> None:
 
     if accessible:
         print_success(f"WinRM access GRANTED on port {port} as {user}")
-        print_finding(f"WinRM: {user}:{password} → port {port}")
+        print_finding("info", f"WinRM: {user}:{password} → port {port}")
     else:
         print_info(f"WinRM access denied on port {port} ({user})")

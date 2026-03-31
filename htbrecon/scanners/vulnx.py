@@ -203,7 +203,7 @@ async def run_vulnx(ctx: ReconContext) -> None:
     all_findings: list[CveInfo] = []
     seen_ids: set[str] = set()
     for res in results:
-        if isinstance(res, Exception):
+        if isinstance(res, BaseException):
             print_warning(f"vulnx search error: {res}")
             continue
         for f in res:
