@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from htbrecon.console import logger, print_info, print_success, print_warning, print_error
+from htbrecon.console import logger, print_info, print_success, print_error
 
 HOSTS_FILE = Path("/etc/hosts")
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from htbrecon import executor
-from htbrecon.console import print_info, print_success, print_warning
+from htbrecon.console import print_info, print_success
 from htbrecon.hosts import add_host
 from htbrecon.models import ReconContext
 
@@ -46,13 +46,13 @@ async def run(ctx: ReconContext) -> None:
         print_info("No web URLs — skipping subdomain enumeration")
         return
     # Prefer port 80, then 443, then first available
-    port_info, target_url = web_urls[0]
+    _, target_url = web_urls[0]
     for pi, url in web_urls:
         if pi.port == 80:
-            port_info, target_url = pi, url
+            target_url = url
             break
         if pi.port == 443:
-            port_info, target_url = pi, url
+            target_url = url
 
     wordlist = config.subdomain_wordlist
     if not wordlist.exists():

@@ -72,11 +72,11 @@ def _parse_trusts(output: str) -> list[str]:
 
 
 def _parse_asreproast(content: str) -> list[str]:
-    return [l.strip() for l in content.splitlines() if l.strip().startswith("$krb5asrep")]
+    return [line.strip() for line in content.splitlines() if line.strip().startswith("$krb5asrep")]
 
 
 def _parse_kerberoasting(content: str) -> list[str]:
-    return [l.strip() for l in content.splitlines() if l.strip().startswith("$krb5tgs")]
+    return [line.strip() for line in content.splitlines() if line.strip().startswith("$krb5tgs")]
 
 
 def _parse_adcs(output: str) -> list[str]:
@@ -183,7 +183,6 @@ async def run(ctx: ReconContext) -> None:
             timeout=60, output_file=out_dir / "ldapsearch.txt",
         )
         enum_raw = anon_result.stdout
-        ldap_access_denied = any(p in anon_result.stdout for p in _LDAP_DENIED)
         entries_count = len(re.findall(r"^dn:\s+", anon_result.stdout, re.MULTILINE))
 
     # Step 3: nxc credential-based enumeration (parallel)
