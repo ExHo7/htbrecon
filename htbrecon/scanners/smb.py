@@ -190,7 +190,7 @@ async def run(ctx: ReconContext) -> None:
             timeout=120,
             output_file=out_dir / "nxc_rid_brute.txt",
         )
-        if not isinstance(rid_result, Exception) and rid_result.returncode != 127:
+        if not isinstance(rid_result, BaseException) and rid_result.returncode != 127:
             rid_users = _parse_rid_users(rid_result.stdout)
 
     ctx.smb = SmbResult(

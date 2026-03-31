@@ -56,6 +56,20 @@ def _build_prompt(ctx: ReconContext) -> str:
         if ctx.smb.av_products:
             sections.append(f"AV/EDR on target: {', '.join(ctx.smb.av_products)}")
 
+    if ctx.ftp:
+        if ctx.ftp.anonymous:
+            sections.append(f"FTP: anonymous login ALLOWED on port {ctx.ftp.port}")
+        elif ctx.ftp.accessible:
+            sections.append(f"FTP: authenticated access on port {ctx.ftp.port}")
+
+    if ctx.mssql and ctx.mssql.accessible:
+        sections.append(
+            f"MSSQL access on port {ctx.mssql.port} — "
+            f"sysadmin={ctx.mssql.sysadmin}, xp_cmdshell={ctx.mssql.xp_cmdshell}"
+        )
+        if ctx.mssql.databases:
+            sections.append(f"MSSQL databases: {', '.join(ctx.mssql.databases)}")
+
     if ctx.spray:
         if ctx.spray.valid_creds:
             sections.append(f"Valid credentials from spray: {', '.join(ctx.spray.valid_creds)}")
