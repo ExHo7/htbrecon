@@ -46,7 +46,7 @@ def _parse_nmap_output(output: str) -> list[PortInfo]:
 
 
 async def run(ctx: ReconContext) -> None:
-    """Run nmap full port scan with service detection."""
+    """Run port scan — RustScan (fast, full range) with nmap fallback."""
     config = ctx.config
     out_dir = config.project_dir / "nmap"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -54,28 +54,37 @@ async def run(ctx: ReconContext) -> None:
     nmap_file = out_dir / "full_scan.nmap"
     xml_file = out_dir / "full_scan.xml"
 
-    cmd = [
-        "nmap",
-        "-F",
-        "-sV",
-        "-Pn",
-        "-oN",
-        str(nmap_file),
-        "-oX",
-        str(xml_file),
-        config.ip,
+    # ── Try RustScan first (discovers all ports then feeds them to nmap -sV) ──
+    rustscan_cmd = [
+        "rustscan",
+        "--addresses", config.ip,
+        "--range", "1-65535",
+        "--ulimit", "5000",
+        "--",
+        "-Pn", "-sV",
+        "-oN", str(nmap_file),
+        "-oX", str(xml_file),
     ]
-
-    result = await executor.run(cmd, timeout=600)
+    result = await executor.run(rustscan_cmd, timeout=600)
 
     if result.returncode == 127:
-        ctx.errors.append("nmap not found — install nmap or run inside Exegol")
-        return
+        # RustScan not available — fall back to nmap
+        print_info("rustscan not found — falling back to nmap")
+        nmap_cmd = [
+            "nmap",
+            "-F", "-sV", "-Pn",
+            "-oN", str(nmap_file),
+            "-oX", str(xml_file),
+            config.ip,
+        ]
+        result = await executor.run(nmap_cmd, timeout=600)
+        if result.returncode == 127:
+            ctx.errors.append("nmap not found — install nmap or rustscan, or run inside Exegol")
+            return
 
     if result.timed_out:
-        ctx.errors.append("nmap scan timed out after 600s")
+        ctx.errors.append("port scan timed out after 600s")
 
-    # Parse whatever output we got (even partial on timeout)
     output = nmap_file.read_text(encoding="utf-8") if nmap_file.exists() else result.stdout
     ports = _parse_nmap_output(output)
 
@@ -89,4 +98,4 @@ async def run(ctx: ReconContext) -> None:
         print_info("No open ports found")
 
     if result.returncode not in (0,) and not result.timed_out:
-        ctx.errors.append(f"nmap exited with code {result.returncode}: {result.stderr[:200]}")
+        ctx.errors.append(f"scan exited with code {result.returncode}: {result.stderr[:200]}")
