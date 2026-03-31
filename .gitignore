@@ -3,3 +3,6 @@ project.md
 results/*
 htbrecon/__pycache__
 htbrecon/scanners/__pycache__
+.mypy_cache/
+.ruff_cache/
+.safety-project.ini

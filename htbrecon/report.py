@@ -189,6 +189,51 @@ WinRM check not performed (no WinRM port detected or no credentials provided).
 
 ---
 
+## SSH
+
+{% if ssh %}
+**Port {{ ssh.port }}:** {{ "**ACCESS GRANTED** (Pwn3d!)" if ssh.accessible else "Access denied" }}
+{% else %}
+SSH check not performed (no SSH port detected or no credentials provided).
+{% endif %}
+
+---
+
+## FTP
+
+{% if ftp %}
+**Port {{ ftp.port }}:**
+{% if ftp.anonymous %}
+**ANONYMOUS LOGIN ALLOWED**
+{% elif ftp.accessible %}
+ACCESS GRANTED (credentials)
+{% else %}
+Access denied (anonymous and credential-based login failed)
+{% endif %}
+{% else %}
+FTP check not performed (no FTP port detected).
+{% endif %}
+
+---
+
+## MSSQL
+
+{% if mssql %}
+**Port {{ mssql.port }}:** {{ "**ACCESS GRANTED**" if mssql.accessible else "Access denied" }}
+- **Sysadmin:** {{ "**YES**" if mssql.sysadmin else "No" }}
+- **xp_cmdshell:** {{ "**ENABLED**" if mssql.xp_cmdshell else "Disabled" }}
+{% if mssql.databases %}
+### Databases
+{% for db in mssql.databases %}
+- {{ db }}
+{% endfor %}
+{% endif %}
+{% else %}
+MSSQL enumeration not performed (no MSSQL port detected or no credentials provided).
+{% endif %}
+
+---
+
 ## LDAP Enumeration
 
 {% if ldap %}
@@ -396,6 +441,9 @@ def generate(ctx: ReconContext) -> Path:
         spray=ctx.spray,
         kerbrute=ctx.kerbrute,
         winrm=ctx.winrm,
+        ssh=ctx.ssh,
+        ftp=ctx.ftp,
+        mssql=ctx.mssql,
         eyewitness=ctx.eyewitness,
         ai_analysis=ctx.ai_analysis,
         errors=ctx.errors,

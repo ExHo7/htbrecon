@@ -165,16 +165,16 @@ async def run(ctx: ReconContext) -> None:
         )
         users_r, da_r, deleg_r, trust_r = ldap_results
 
-        if not isinstance(users_r, Exception):
+        if not isinstance(users_r, BaseException):
             enum_raw = users_r.stdout
             ldap_users = _parse_users(users_r.stdout)
             descriptions = _parse_descriptions(users_r.stdout)
             entries_count = len(re.findall(r"^dn:\s+", users_r.stdout, re.MULTILINE))
-        if not isinstance(da_r, Exception):
+        if not isinstance(da_r, BaseException):
             domain_admins = _parse_group_members(da_r.stdout)
-        if not isinstance(deleg_r, Exception):
+        if not isinstance(deleg_r, BaseException):
             unconstrained_delegation = _parse_users(deleg_r.stdout)
-        if not isinstance(trust_r, Exception):
+        if not isinstance(trust_r, BaseException):
             domain_trusts = _parse_trusts(trust_r.stdout)
     else:
         # Anonymous: full dump just to count entries
@@ -224,21 +224,21 @@ async def run(ctx: ReconContext) -> None:
 
         asrep_r, kerb_r, adcs_r, certipy_r, badsucc_r = results
 
-        if not isinstance(asrep_r, Exception):
+        if not isinstance(asrep_r, BaseException):
             try:
                 asreproast_hashes = _parse_asreproast(asrep_file.read_text(encoding="utf-8"))
             except OSError:
                 pass
-        if not isinstance(kerb_r, Exception):
+        if not isinstance(kerb_r, BaseException):
             try:
                 kerberoast_hashes = _parse_kerberoasting(kerb_file.read_text(encoding="utf-8"))
             except OSError:
                 pass
-        if not isinstance(adcs_r, Exception):
+        if not isinstance(adcs_r, BaseException):
             adcs_cas = _parse_adcs(adcs_r.stdout)
-        if not isinstance(certipy_r, Exception):
+        if not isinstance(certipy_r, BaseException):
             adcs_vulns = _parse_adcs_vulns(certipy_r.stdout)
-        if not isinstance(badsucc_r, Exception):
+        if not isinstance(badsucc_r, BaseException):
             badsuccessor_dmsas = _parse_badsuccessor(badsucc_r.stdout)
 
     # Assemble result

@@ -164,6 +164,34 @@ class EyeWitnessResult(BaseModel):
     output_dir: str = ""
 
 
+class SshResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    accessible: bool = False
+    port: int = 22
+    raw_output: str = ""
+
+
+class FtpResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    anonymous: bool = False
+    accessible: bool = False
+    port: int = 21
+    raw_output: str = ""
+
+
+class MssqlResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    accessible: bool = False
+    sysadmin: bool = False
+    xp_cmdshell: bool = False
+    databases: list[str] = []
+    port: int = 1433
+    raw_output: str = ""
+
+
 class ReconContext:
     """Mutable shared state accumulated across the pipeline."""
 
@@ -183,6 +211,9 @@ class ReconContext:
         self.kerbrute: KerbruteResult | None = None
         self.spider: SpiderResult | None = None
         self.winrm: WinRmResult | None = None
+        self.ssh: SshResult | None = None
+        self.ftp: FtpResult | None = None
+        self.mssql: MssqlResult | None = None
         self.eyewitness: EyeWitnessResult | None = None
         self.ai_analysis: str = ""
         self.errors: list[str] = []
@@ -213,6 +244,18 @@ class ReconContext:
     @property
     def has_winrm(self) -> bool:
         return any(p.port in (5985, 5986) for p in self.open_ports)
+
+    @property
+    def has_ssh(self) -> bool:
+        return any(p.port in (22, 2222, 22222) for p in self.open_ports)
+
+    @property
+    def has_ftp(self) -> bool:
+        return any(p.port in (21, 2121) for p in self.open_ports)
+
+    @property
+    def has_mssql(self) -> bool:
+        return any(p.port in (1433, 1434) for p in self.open_ports)
 
     @property
     def all_hostnames(self) -> list[str]:

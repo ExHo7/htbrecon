@@ -81,7 +81,7 @@ async def run(ctx: ReconContext) -> None:
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     for r in results:
-        if isinstance(r, Exception):
+        if isinstance(r, BaseException):
             ctx.errors.append(f"ffuf dirs error: {r}")
             continue
         ctx.directories.append(r)

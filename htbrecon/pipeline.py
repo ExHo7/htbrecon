@@ -10,13 +10,16 @@ from htbrecon.scanners import (
     eyewitness,
     ffuf_dirs,
     ffuf_subdomains,
+    ftp,
     kerbrute,
     ldap,
+    mssql,
     nmap,
     nuclei,
     smb,
     spider,
     spray,
+    ssh,
     vulnx,
     whatweb,
     winrm,
@@ -25,7 +28,7 @@ from htbrecon.scanners import (
 
 def _setup_dirs(config: ReconConfig) -> None:
     """Create project directory structure."""
-    for subdir in ("nmap", "web", "ffuf", "nuclei", "smb", "ldap", "vulnx", "spider", "eyewitness", "kerbrute", "winrm"):
+    for subdir in ("nmap", "web", "ffuf", "nuclei", "smb", "ldap", "vulnx", "spider", "eyewitness", "kerbrute", "winrm", "ssh", "ftp", "mssql"):
         (config.project_dir / subdir).mkdir(parents=True, exist_ok=True)
 
 
@@ -124,6 +127,36 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
             except Exception as e:
                 ctx.errors.append(f"WinRM error: {e}")
                 print_error(f"WinRM: {e}")
+
+    # ── Phase 3f: SSH Access Check ─────────────────────────────
+    if ctx.has_ssh and ctx.config.credentials:
+        print_phase("SSH Access Check")
+        with console.status("[bold cyan]Checking SSH access...", spinner="dots"):
+            try:
+                await ssh.run(ctx)
+            except Exception as e:
+                ctx.errors.append(f"SSH error: {e}")
+                print_error(f"SSH: {e}")
+
+    # ── Phase 3g: FTP Access Check ─────────────────────────────
+    if ctx.has_ftp:
+        print_phase("FTP Access Check")
+        with console.status("[bold cyan]Checking FTP access...", spinner="dots"):
+            try:
+                await ftp.run(ctx)
+            except Exception as e:
+                ctx.errors.append(f"FTP error: {e}")
+                print_error(f"FTP: {e}")
+
+    # ── Phase 3h: MSSQL Enumeration ────────────────────────────
+    if ctx.has_mssql and ctx.config.credentials:
+        print_phase("MSSQL Enumeration")
+        with console.status("[bold cyan]Enumerating MSSQL...", spinner="dots"):
+            try:
+                await mssql.run(ctx)
+            except Exception as e:
+                ctx.errors.append(f"MSSQL error: {e}")
+                print_error(f"MSSQL: {e}")
 
     # ── Phase 4: Web Recon ──────────────────────────────────────
     if ctx.http_ports:
