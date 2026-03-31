@@ -72,6 +72,23 @@ def _parse_nopac(output: str) -> bool:
     return any(msg.strip() == "VULNERABLE" for msg in _nxc_msg(output))
 
 
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
+
+
+def _parse_coerce_plus(output: str) -> list[str]:
+    """Extract coercion vulnerability names from nxc coerce_plus output."""
+    vulns: list[str] = []
+    for msg in _nxc_msg(_strip_ansi(output)):
+        m = re.search(r"VULNERABLE,\s*(.+)", msg)
+        if m:
+            vulns.append(m.group(1).strip())
+    return sorted(set(vulns))
+
+
 def _parse_rid_users(output: str) -> list[str]:
     """Extract usernames from nxc --rid-brute output (SidTypeUser entries only)."""
     users: list[str] = []
@@ -161,6 +178,7 @@ async def run(ctx: ReconContext) -> None:
     ntlm_vuln = False
     av_products: list[str] = []
     nopac_vuln = False
+    coerce_vulns: list[str] = []
 
     if config.credentials:
         user, password = config.credentials
@@ -172,15 +190,19 @@ async def run(ctx: ReconContext) -> None:
                          output_file=out_dir / "nxc_enum_av.txt"),
             executor.run([*nxc_base, "-M", "nopac"], timeout=60,
                          output_file=out_dir / "nxc_nopac.txt"),
+            executor.run([*nxc_base, "-M", "coerce_plus"], timeout=120,
+                         output_file=out_dir / "nxc_coerce_plus.txt"),
             return_exceptions=True,
         )
-        ntlm_r, av_r, nopac_r = vuln_results
+        ntlm_r, av_r, nopac_r, coerce_r = vuln_results
         if not isinstance(ntlm_r, BaseException):
             ntlm_vuln = _parse_ntlm_reflection(ntlm_r.stdout)
         if not isinstance(av_r, BaseException):
             av_products = _parse_enum_av(av_r.stdout)
         if not isinstance(nopac_r, BaseException):
             nopac_vuln = _parse_nopac(nopac_r.stdout)
+        if not isinstance(coerce_r, BaseException):
+            coerce_vulns = _parse_coerce_plus(coerce_r.stdout)
 
     # RID brute (only without credentials — enumerates users via RID cycling)
     rid_users: list[str] = []
@@ -199,6 +221,7 @@ async def run(ctx: ReconContext) -> None:
         ntlm_reflection_vulnerable=ntlm_vuln,
         av_products=av_products,
         nopac_vulnerable=nopac_vuln,
+        coerce_vulns=coerce_vulns,
         rid_users=rid_users,
         enum4linux_output=enum_output,
         nxc_output=nxc_output,
@@ -224,6 +247,8 @@ async def run(ctx: ReconContext) -> None:
         print_finding("critical", "NTLM Reflection vulnerable (CVE-2025-33073)")
     if nopac_vuln:
         print_finding("critical", "NoPac vulnerable (CVE-2021-42278/42287)")
+    if coerce_vulns:
+        print_finding("critical", f"Coercion vulnerabilities: {', '.join(coerce_vulns)}")
     if av_products:
         print_finding("info", f"AV/EDR detected: {', '.join(av_products)}")
 

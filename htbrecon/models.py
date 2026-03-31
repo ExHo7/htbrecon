@@ -93,6 +93,7 @@ class SmbResult(BaseModel):
     ntlm_reflection_vulnerable: bool = False
     av_products: list[str] = []
     nopac_vulnerable: bool = False
+    coerce_vulns: list[str] = []
     rid_users: list[str] = []
     enum4linux_output: str
     nxc_output: str

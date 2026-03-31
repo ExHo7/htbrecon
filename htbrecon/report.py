@@ -131,6 +131,7 @@ No users found.
 ### Vulnerability Checks
 - **NTLM Reflection (CVE-2025-33073):** {{ "**VULNERABLE**" if smb.ntlm_reflection_vulnerable else "Not vulnerable" }}
 - **NoPac (CVE-2021-42278/42287):** {{ "**VULNERABLE**" if smb.nopac_vulnerable else "Not vulnerable" }}
+- **Coercion (coerce_plus):** {{ "**VULNERABLE** — " + smb.coerce_vulns | join(", ") if smb.coerce_vulns else "Not vulnerable" }}
 - **AV/EDR:** {{ smb.av_products | join(", ") if smb.av_products else "None detected" }}
 
 {% if smb.rid_users %}

@@ -46,7 +46,7 @@ async def run(ctx: ReconContext) -> None:
         print_warning("EyeWitness not found")
         return
 
-    screenshots_count = result.stdout.count("Attempting to screenshot")
+    screenshots_count = len(list(screenshots_dir.glob("screens/*.png"))) if screenshots_dir.exists() else 0
 
     ctx.eyewitness = EyeWitnessResult(
         screenshots_count=screenshots_count,
@@ -55,5 +55,9 @@ async def run(ctx: ReconContext) -> None:
 
     if screenshots_count > 0:
         print_success(f"EyeWitness: {screenshots_count} screenshot(s) saved to {screenshots_dir}")
+    elif result.returncode != 0:
+        err = result.stderr[:200] if result.stderr else "unknown error"
+        ctx.errors.append(f"EyeWitness failed (rc={result.returncode}): {err}")
+        print_warning(f"EyeWitness failed: {err}")
     else:
         print_info("EyeWitness: no screenshots produced")

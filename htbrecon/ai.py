@@ -53,6 +53,8 @@ def _build_prompt(ctx: ReconContext) -> str:
             smb_vulns.append("NoPac (CVE-2021-42278/42287)")
         if smb_vulns:
             sections.append(f"SMB vulnerabilities: {', '.join(smb_vulns)}")
+        if ctx.smb.coerce_vulns:
+            sections.append(f"NTLM coercion vulnerabilities: {', '.join(ctx.smb.coerce_vulns)}")
         if ctx.smb.av_products:
             sections.append(f"AV/EDR on target: {', '.join(ctx.smb.av_products)}")
 
