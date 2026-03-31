@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import sys
 from typing import Optional
 
 import typer
 
 from htbrecon.config import build_config
-from htbrecon.console import console, print_banner, print_error, print_info, print_success
+from htbrecon.console import console, print_banner, print_error
 
 app = typer.Typer(
     name="htbrecon",
@@ -60,7 +59,7 @@ def setup(
     force: bool = typer.Option(False, "--force", help="Reinstall even if already present"),
 ) -> None:
     """Install vulnx binary (CVE intelligence) into /usr/local/bin."""
-    from htbrecon.setup import check_vulnx, run_setup, run_setup_force
+    from htbrecon.setup import run_setup, run_setup_force
 
     if force:
         run_setup_force()

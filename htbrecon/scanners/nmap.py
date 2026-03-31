@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from htbrecon import executor
-from htbrecon.console import logger, print_info, print_ports_table, print_success
+from htbrecon.console import print_info, print_ports_table, print_success
 from htbrecon.models import NmapResult, PortInfo, ReconContext
 
 PORT_RE = re.compile(

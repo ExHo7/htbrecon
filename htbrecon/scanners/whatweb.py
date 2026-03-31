@@ -39,8 +39,8 @@ def _detects_https_redirect(output: str) -> bool:
         if re.search(r"\[30[1237]\s", line) and "RedirectLocation[https://" in line:
             return True
     # Also check if output contains both http 301 and a subsequent https 200
-    has_301 = any("301" in l and "http://" in l for l in lines)
-    has_https_200 = any("200" in l and "https://" in l for l in lines)
+    has_301 = any("301" in line and "http://" in line for line in lines)
+    has_https_200 = any("200" in line and "https://" in line for line in lines)
     return has_301 and has_https_200
 
 
