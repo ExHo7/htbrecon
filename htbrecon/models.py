@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import ipaddress
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class PortInfo(BaseModel):
@@ -92,6 +93,7 @@ class SmbResult(BaseModel):
     ntlm_reflection_vulnerable: bool = False
     av_products: list[str] = []
     nopac_vulnerable: bool = False
+    rid_users: list[str] = []
     enum4linux_output: str
     nxc_output: str
 
@@ -130,6 +132,38 @@ class LdapResult(BaseModel):
     badsuccessor_dmsas: list[str] = []
 
 
+class KerbruteResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    valid_users: list[str] = []
+    tested_count: int = 0
+    raw_output: str = ""
+
+
+class SpiderResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    interesting_files: list[str] = []  # "SHARE/path/file.ext" format
+    shares_spidered: list[str] = []
+    output_dir: str = ""
+    raw_output: str = ""
+
+
+class WinRmResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    accessible: bool = False
+    port: int = 5985
+    raw_output: str = ""
+
+
+class EyeWitnessResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    screenshots_count: int = 0
+    output_dir: str = ""
+
+
 class ReconContext:
     """Mutable shared state accumulated across the pipeline."""
 
@@ -146,6 +180,10 @@ class ReconContext:
         self.ldap: LdapResult | None = None
         self.bloodhound: BloodHoundResult | None = None
         self.spray: SprayResult | None = None
+        self.kerbrute: KerbruteResult | None = None
+        self.spider: SpiderResult | None = None
+        self.winrm: WinRmResult | None = None
+        self.eyewitness: EyeWitnessResult | None = None
         self.ai_analysis: str = ""
         self.errors: list[str] = []
 
@@ -167,6 +205,14 @@ class ReconContext:
     @property
     def has_ldap(self) -> bool:
         return any(p.port in (389, 636, 3268, 3269) for p in self.open_ports)
+
+    @property
+    def has_kerberos(self) -> bool:
+        return any(p.port == 88 for p in self.open_ports)
+
+    @property
+    def has_winrm(self) -> bool:
+        return any(p.port in (5985, 5986) for p in self.open_ports)
 
     @property
     def all_hostnames(self) -> list[str]:
@@ -227,6 +273,15 @@ class ReconConfig(BaseModel):
     directory_wordlist: Path = Path(
         "/usr/share/seclists/Discovery/Web-Content/raft-small-directories-lowercase.txt"
     )
+
+    @field_validator("ip")
+    @classmethod
+    def validate_ip(cls, v: str) -> str:
+        try:
+            ipaddress.ip_address(v)
+        except ValueError:
+            raise ValueError(f"Invalid IP address: {v!r}")
+        return v
 
     @property
     def base_url(self) -> str:

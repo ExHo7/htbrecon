@@ -7,21 +7,25 @@ from htbrecon.hosts import add_host
 from htbrecon.models import ReconConfig, ReconContext
 from htbrecon.scanners import (
     bloodhound,
+    eyewitness,
     ffuf_dirs,
     ffuf_subdomains,
+    kerbrute,
     ldap,
     nmap,
     nuclei,
     smb,
+    spider,
     spray,
     vulnx,
     whatweb,
+    winrm,
 )
 
 
 def _setup_dirs(config: ReconConfig) -> None:
     """Create project directory structure."""
-    for subdir in ("nmap", "web", "ffuf", "nuclei", "smb", "ldap", "vulnx"):
+    for subdir in ("nmap", "web", "ffuf", "nuclei", "smb", "ldap", "vulnx", "spider", "eyewitness", "kerbrute", "winrm"):
         (config.project_dir / subdir).mkdir(parents=True, exist_ok=True)
 
 
@@ -71,7 +75,27 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
     else:
         print_success("No services to enumerate in this phase")
 
-    # ── Phase 3b: Active Directory (BloodHound) ─────────────────
+    # ── Phase 3a: SMB Share Spidering ──────────────────────────
+    if ctx.has_smb:
+        print_phase("SMB Share Spidering")
+        with console.status("[bold cyan]Spidering SMB shares...", spinner="dots"):
+            try:
+                await spider.run(ctx)
+            except Exception as e:
+                ctx.errors.append(f"Spider error: {e}")
+                print_error(f"Spider: {e}")
+
+    # ── Phase 3b: Kerberos User Enumeration ────────────────────
+    if ctx.has_kerberos and not ctx.config.credentials:
+        print_phase("Kerberos User Enumeration")
+        with console.status("[bold cyan]Enumerating users via Kerberos...", spinner="dots"):
+            try:
+                await kerbrute.run(ctx)
+            except Exception as e:
+                ctx.errors.append(f"Kerbrute error: {e}")
+                print_error(f"Kerbrute: {e}")
+
+    # ── Phase 3c: Active Directory (BloodHound) ─────────────────
     if ctx.has_ldap and ctx.config.credentials:
         print_phase("Active Directory Enumeration")
         with console.status("[bold cyan]Collecting BloodHound data...", spinner="dots"):
@@ -81,7 +105,7 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
                 ctx.errors.append(f"BloodHound error: {e}")
                 print_error(f"BloodHound: {e}")
 
-    # ── Phase 3c: Password Spray ────────────────────────────────
+    # ── Phase 3d: Password Spray ────────────────────────────────
     if ctx.has_smb:
         print_phase("Password Spray")
         with console.status("[bold cyan]Testing username=password...", spinner="dots"):
@@ -90,6 +114,16 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
             except Exception as e:
                 ctx.errors.append(f"Spray error: {e}")
                 print_error(f"Spray: {e}")
+
+    # ── Phase 3e: WinRM Access Check ───────────────────────────
+    if ctx.has_winrm and ctx.config.credentials:
+        print_phase("WinRM Access Check")
+        with console.status("[bold cyan]Checking WinRM access...", spinner="dots"):
+            try:
+                await winrm.run(ctx)
+            except Exception as e:
+                ctx.errors.append(f"WinRM error: {e}")
+                print_error(f"WinRM: {e}")
 
     # ── Phase 4: Web Recon ──────────────────────────────────────
     if ctx.http_ports:
@@ -110,6 +144,7 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
         phase4_tasks = []
         phase4_tasks.append(("Directory scan", ffuf_dirs.run(ctx)))
         phase4_tasks.append(("Nuclei scan", nuclei.run(ctx)))
+        phase4_tasks.append(("EyeWitness", eyewitness.run(ctx)))
 
         names = ", ".join(name for name, _ in phase4_tasks)
         with console.status(f"[bold cyan]Running: {names}...", spinner="dots"):

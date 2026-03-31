@@ -72,6 +72,16 @@ def _parse_nopac(output: str) -> bool:
     return any(msg.strip() == "VULNERABLE" for msg in _nxc_msg(output))
 
 
+def _parse_rid_users(output: str) -> list[str]:
+    """Extract usernames from nxc --rid-brute output (SidTypeUser entries only)."""
+    users: list[str] = []
+    for msg in _nxc_msg(output):
+        m = re.search(r"\d+:\s+\S+\\([\w.\-]+)\s+\(SidTypeUser\)", msg)
+        if m:
+            users.append(m.group(1))
+    return sorted(set(users))
+
+
 _SMB_DENIED = ("STATUS_ACCESS_DENIED", "STATUS_USER_SESSION_DELETED", "STATUS_LOGON_FAILURE")
 
 
@@ -166,12 +176,24 @@ async def run(ctx: ReconContext) -> None:
         if not isinstance(nopac_r, Exception):
             nopac_vuln = _parse_nopac(nopac_r.stdout)
 
+    # RID brute (only without credentials — enumerates users via RID cycling)
+    rid_users: list[str] = []
+    if not config.credentials:
+        rid_result = await executor.run(
+            ["nxc", "smb", config.ip, "--rid-brute", "10000"],
+            timeout=120,
+            output_file=out_dir / "nxc_rid_brute.txt",
+        )
+        if not isinstance(rid_result, Exception) and rid_result.returncode != 127:
+            rid_users = _parse_rid_users(rid_result.stdout)
+
     ctx.smb = SmbResult(
         shares=shares,
         users=users,
         ntlm_reflection_vulnerable=ntlm_vuln,
         av_products=av_products,
         nopac_vulnerable=nopac_vuln,
+        rid_users=rid_users,
         enum4linux_output=enum_output,
         nxc_output=nxc_output,
     )
@@ -198,3 +220,8 @@ async def run(ctx: ReconContext) -> None:
         print_finding("critical", "NoPac vulnerable (CVE-2021-42278/42287)")
     if av_products:
         print_finding("info", f"AV/EDR detected: {', '.join(av_products)}")
+
+    if rid_users:
+        print_success(f"RID brute: {len(rid_users)} user(s) found")
+        for u in rid_users:
+            print_finding("info", f"RID user: {u}")

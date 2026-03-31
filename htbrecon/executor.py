@@ -15,6 +15,7 @@ EXEGOL_ALIASES: dict[str, list[str]] = {
         "/usr/local/rvm/gems/ruby-3.2.2@whatweb/wrappers/ruby",
         "/opt/tools/WhatWeb/whatweb",
     ],
+    "eyewitness": ["python3", "/opt/tools/EyeWitness/Python/EyeWitness.py"],
 }
 
 

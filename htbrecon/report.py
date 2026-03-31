@@ -132,8 +132,31 @@ No users found.
 - **NTLM Reflection (CVE-2025-33073):** {{ "**VULNERABLE**" if smb.ntlm_reflection_vulnerable else "Not vulnerable" }}
 - **NoPac (CVE-2021-42278/42287):** {{ "**VULNERABLE**" if smb.nopac_vulnerable else "Not vulnerable" }}
 - **AV/EDR:** {{ smb.av_products | join(", ") if smb.av_products else "None detected" }}
+
+{% if smb.rid_users %}
+### RID Brute ({{ smb.rid_users | length }} users)
+{% for u in smb.rid_users %}
+- {{ u }}
+{% endfor %}
+{% endif %}
 {% else %}
 SMB enumeration not performed (no SMB ports detected).
+{% endif %}
+
+---
+
+## SMB Share Spider
+
+{% if spider and spider.interesting_files %}
+**{{ spider.interesting_files | length }} interesting file(s) across {{ spider.shares_spidered | length }} share(s):**
+
+{% for f in spider.interesting_files %}
+- `{{ f }}`
+{% endfor %}
+{% elif spider %}
+Spider ran — no interesting files found in {{ spider.shares_spidered | length }} share(s).
+{% else %}
+SMB spider not performed.
 {% endif %}
 
 ---
@@ -152,6 +175,16 @@ No valid credentials found via username=password spray ({{ spray.users_tested }}
 *(Lockout threshold: {{ spray.lockout_threshold if spray.lockout_threshold > 0 else "disabled" }})*
 {% else %}
 Password spray not performed.
+{% endif %}
+
+---
+
+## WinRM
+
+{% if winrm %}
+**Port {{ winrm.port }}:** {{ "**ACCESS GRANTED** (Pwn3d!)" if winrm.accessible else "Access denied" }}
+{% else %}
+WinRM check not performed (no WinRM port detected or no credentials provided).
 {% endif %}
 
 ---
@@ -291,6 +324,34 @@ BloodHound not run (no credentials provided or no LDAP detected).
 
 ---
 
+## Kerberos User Enumeration (Kerbrute)
+
+{% if kerbrute and kerbrute.valid_users %}
+**{{ kerbrute.valid_users | length }} valid user(s) found ({{ kerbrute.tested_count }} tested):**
+
+{% for u in kerbrute.valid_users %}
+- `{{ u }}`
+{% endfor %}
+{% elif kerbrute %}
+No valid users found ({{ kerbrute.tested_count }} tested).
+{% else %}
+Kerbrute not run (credentials provided or port 88 not detected).
+{% endif %}
+
+---
+
+## Web Screenshots (EyeWitness)
+
+{% if eyewitness and eyewitness.screenshots_count > 0 %}
+{{ eyewitness.screenshots_count }} screenshot(s) saved to: `{{ eyewitness.output_dir }}`
+{% elif eyewitness %}
+EyeWitness ran but produced no screenshots.
+{% else %}
+EyeWitness not run (no HTTP ports detected).
+{% endif %}
+
+---
+
 ## AI Analysis
 
 {% if ai_analysis %}
@@ -329,9 +390,13 @@ def generate(ctx: ReconContext) -> Path:
         vulnx=ctx.vulnx,
         nuclei=ctx.nuclei,
         smb=ctx.smb,
+        spider=ctx.spider,
         ldap=ctx.ldap,
         bloodhound=ctx.bloodhound,
         spray=ctx.spray,
+        kerbrute=ctx.kerbrute,
+        winrm=ctx.winrm,
+        eyewitness=ctx.eyewitness,
         ai_analysis=ctx.ai_analysis,
         errors=ctx.errors,
     )

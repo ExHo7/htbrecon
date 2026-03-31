@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+from htbrecon import executor
+from htbrecon.console import print_info, print_success, print_warning
+from htbrecon.models import EyeWitnessResult, ReconContext
+
+
+async def run(ctx: ReconContext) -> None:
+    config = ctx.config
+    out_dir = config.project_dir / "eyewitness"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build URL list: main hostname + all discovered subdomains
+    urls: list[str] = []
+    seen: set[str] = set()
+    for hostname in ctx.all_hostnames:
+        for _, url in ctx.web_urls(hostname=hostname):
+            if url not in seen:
+                seen.add(url)
+                urls.append(url)
+
+    if not urls:
+        return
+
+    # Write URLs file outside the EyeWitness output directory — EyeWitness
+    # may clear its output dir on startup, deleting the file before reading it.
+    urls_file = (config.project_dir / "eyewitness_urls.txt").resolve()
+    urls_file.write_text("\n".join(urls), encoding="utf-8")
+    print_info(f"EyeWitness: screenshotting {len(urls)} URL(s)...")
+
+    out_dir_abs = out_dir.resolve()
+    cmd = [
+        "eyewitness",
+        "--web",
+        "-f", str(urls_file),
+        "-d", str(out_dir_abs),
+        "--no-prompt",
+        "--timeout", "20",
+        "--threads", "2",
+    ]
+
+    result = await executor.run(cmd, timeout=300, output_file=out_dir_abs / "eyewitness_stdout.txt")
+
+    if result.returncode == 127:
+        ctx.errors.append("EyeWitness not found — skipping web screenshots")
+        print_warning("EyeWitness not found")
+        return
+
+    screenshots_count = result.stdout.count("Attempting to screenshot")
+
+    ctx.eyewitness = EyeWitnessResult(
+        screenshots_count=screenshots_count,
+        output_dir=str(out_dir_abs),
+    )
+
+    if screenshots_count > 0:
+        print_success(f"EyeWitness: {screenshots_count} screenshot(s) saved to {out_dir}")
+    else:
+        print_info("EyeWitness: no screenshots produced")
