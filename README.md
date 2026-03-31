@@ -52,9 +52,10 @@
 Inside your Exegol container:
 
 ```bash
-git clone https://github.com/ExHo7/HTBRecon.git /opt/HTBRecon
-cd /opt/HTBRecon
+git clone https://github.com/ExHo7/HTBRecon.git /opt/tools/HTBRecon
+cd /opt/tools/HTBRecon
 pip install -e .
+cd /workspace
 ```
 
 Then install the `vulnx` dependency:
@@ -74,7 +75,7 @@ htbrecon setup --force
 
 ## Usage
 
-### Basic run
+### Basic run for HTB machine
 
 ```bash
 htbrecon run -i 10.10.11.42 -n machinename
@@ -94,7 +95,7 @@ htbrecon run -i 10.10.11.42 -n machinename --credentials admin:Password123
 Credentials unlock additional scanners: SMB vuln checks, LDAP full dump, BloodHound collection, WinRM access check.
 When credentials are provided, Kerbrute and RID brute-force are skipped (user enumeration is not needed).
 
-### Custom domain
+### Custom domain for other platforms
 
 ```bash
 htbrecon run -i 10.10.11.42 -n dc01 --domain corp.local
