@@ -203,8 +203,26 @@ async def run(ctx: ReconContext) -> None:
         for _, url in ctx.web_urls(hostname):
             targets.append((hostname, url))
 
+    # Baseline size per host: probe a guaranteed-404 path to detect wildcard 200s
+    baselines: dict[str, int] = {}
+    for hostname, base_url in targets:
+        bl_result = await executor.run([
+            "curl", "-s", "-k", "-o", "/dev/null",
+            "-w", "%{http_code}:%{size_download}",
+            "--max-time", "5",
+            f"{base_url}/htbrecon-nonexistent-{hostname}",
+        ], timeout=10)
+        try:
+            bl_parts = bl_result.stdout.strip().split(":")
+            bl_status, bl_size = int(bl_parts[0]), int(bl_parts[1])
+            # If server returns 200 on garbage path → it's a wildcard, record size to filter
+            baselines[base_url] = bl_size if bl_status == 200 else -1
+        except (ValueError, IndexError):
+            baselines[base_url] = -1
+
     for hostname, base_url in targets:
         print_info(f"API probe: {base_url}")
+        wildcard_size = baselines.get(base_url, -1)
 
         # Phase 1 — passive probe of known paths
         probe_tasks = [
@@ -217,41 +235,61 @@ async def run(ctx: ReconContext) -> None:
             if isinstance(res, BaseException) or res is None:
                 continue
             endpoint_url, status, size = res
-            discovered_endpoints.append(f"{endpoint_url} [{status}]")
 
-            # Detect spec files
+            # Filter wildcard responses: same size as baseline → likely fake 200
+            if wildcard_size > 0 and size == wildcard_size:
+                continue
+
+            label = f"{endpoint_url} [{status}]"
+
+            # Detect spec files — stored separately, NOT in endpoints
             if any(kw in endpoint_url for kw in ("swagger", "openapi", "api-docs")):
-                spec_urls.append(endpoint_url)
-                print_finding("api", f"API spec found: {endpoint_url} [{status}]")
+                if endpoint_url not in spec_urls:
+                    spec_urls.append(endpoint_url)
+                    print_finding("api", f"API spec found: {endpoint_url} [{status}]")
             else:
-                print_success(f"API endpoint: {endpoint_url} [{status}]")
+                if label not in discovered_endpoints:
+                    discovered_endpoints.append(label)
+                    print_success(f"API endpoint: {endpoint_url} [{status}]")
 
         # Phase 2 — GraphQL introspection
         gql_open = await _probe_graphql(base_url)
         if gql_open:
             gql_url = base_url.rstrip("/") + "/graphql"
-            graphql_endpoints.append(gql_url)
-            print_finding("api", f"GraphQL introspection OPEN: {gql_url}")
+            if gql_url not in graphql_endpoints:
+                graphql_endpoints.append(gql_url)
+                print_finding("api", f"GraphQL introspection OPEN: {gql_url}")
 
-        # Phase 3 — ffuf fuzzing with API wordlist
+        # Phase 3 — ffuf fuzzing (only adds paths NOT already in probe results)
         if wordlist:
             safe_name = hostname.replace(".", "_")
             out_file = str(out_dir / f"api_{safe_name}.json")
             try:
                 fuzz_hits = await _ffuf_api(base_url, wordlist, out_file)
+                # Build set of already-known paths (without status tag) for dedup
+                known_paths = {
+                    e.split(" [")[0].replace(base_url, "")
+                    for e in discovered_endpoints
+                } | {s.replace(base_url, "") for s in spec_urls}
+
+                new_hits = 0
                 for hit in fuzz_hits:
-                    full = f"{base_url}{hit}"
-                    if full not in discovered_endpoints:
+                    path = hit.split(" [")[0]  # "/api/v1/foo"
+                    if path not in known_paths:
+                        full = f"{base_url}{hit}"
                         ffuf_results.append(full)
-                if fuzz_hits:
-                    print_success(f"ffuf API fuzz on {hostname}: {len(fuzz_hits)} endpoint(s)")
-                    for h in fuzz_hits[:10]:
+                        known_paths.add(path)
+                        new_hits += 1
+                if new_hits:
+                    print_success(f"ffuf API fuzz on {hostname}: {new_hits} new endpoint(s)")
+                    for h in ffuf_results[-new_hits:][:10]:
                         print_info(f"  {h}")
             except Exception as exc:
                 ctx.errors.append(f"API ffuf error on {hostname}: {exc}")
         else:
             print_warning("API wordlist not found — skipping ffuf API fuzz")
 
+    # Final merge: endpoints = probe hits + ffuf-only hits (specs kept separate)
     all_endpoints = list(dict.fromkeys(discovered_endpoints + ffuf_results))
 
     ctx.api = ApiResult(
@@ -261,8 +299,8 @@ async def run(ctx: ReconContext) -> None:
         api_tech_hints=api_tech_hints,
     )
 
-    total = len(all_endpoints) + len(graphql_endpoints)
+    total = len(all_endpoints) + len(graphql_endpoints) + len(spec_urls)
     if total:
-        print_finding("api", f"{total} API endpoint(s) found — {len(spec_urls)} spec(s), {len(graphql_endpoints)} GraphQL")
+        print_finding("api", f"{total} API item(s) — {len(spec_urls)} spec(s), {len(graphql_endpoints)} GraphQL, {len(all_endpoints)} endpoint(s)")
     else:
         print_info("No API endpoints discovered")

@@ -412,6 +412,8 @@ Kerbrute not run (credentials provided or port 88 not detected).
 {% for e in api.endpoints %}
 - {{ e }}
 {% endfor %}
+
+*Note: API specs listed above are not repeated here.*
 {% endif %}
 
 {% else %}

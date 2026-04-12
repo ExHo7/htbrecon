@@ -99,6 +99,43 @@ def _build_prompt(ctx: ReconContext) -> str:
     if ctx.bloodhound and ctx.bloodhound.summary_text:
         sections.append(f"BloodHound AD enumeration:\n{ctx.bloodhound.summary_text}")
 
+    if ctx.api:
+        if ctx.api.spec_urls:
+            sections.append(f"API specs exposed: {', '.join(ctx.api.spec_urls)}")
+        if ctx.api.graphql_endpoints:
+            sections.append(f"GraphQL introspection open: {', '.join(ctx.api.graphql_endpoints)}")
+        if ctx.api.endpoints:
+            notable = [e for e in ctx.api.endpoints if any(
+                kw in e for kw in ("401", "403", "credential", "admin", "token", "auth", "key", "secret", "config", "env")
+            )]
+            all_shown = notable[:20] or ctx.api.endpoints[:20]
+            sections.append(f"API endpoints ({len(ctx.api.endpoints)} total, sample):\n" +
+                            "\n".join(f"  {e}" for e in all_shown))
+
+    # Products rarely exploitable on HTB — keep in full report but skip in AI prompt
+    _HTB_LOW_SIGNAL = frozenset({"nginx", "openssh", "openssl", "http_server"})
+
+    if ctx.vulnx and ctx.vulnx.findings:
+        actionable = [f for f in ctx.vulnx.findings if f.product not in _HTB_LOW_SIGNAL]
+        kev = [f for f in actionable if f.is_kev]
+        crit = [f for f in actionable if f.severity == "critical"]
+        high_poc = [f for f in actionable if f.severity == "high" and f.is_poc]
+        vuln_lines = []
+        for f in (kev + crit + high_poc)[:15]:
+            tags = []
+            if f.is_kev:
+                tags.append("KEV")
+            if f.is_poc:
+                tags.append("PoC")
+            tag_str = f" [{', '.join(tags)}]" if tags else ""
+            vuln_lines.append(f"  {f.cve_id} (CVSS {f.cvss_score}) {f.product}: {f.description[:120]}{tag_str}")
+        if vuln_lines:
+            sections.append(
+                f"CVE intelligence — {len(actionable)} actionable CVE(s) "
+                f"(nginx/openssh excluded as low-signal for HTB) "
+                f"({len(kev)} KEV, {len(crit)} critical):\n" + "\n".join(vuln_lines)
+            )
+
     if ctx.config.credentials:
         sections.append(f"Credentials available: {ctx.config.credentials[0]}:***")
 
