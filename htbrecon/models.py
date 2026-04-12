@@ -325,7 +325,7 @@ class ReconConfig(BaseModel):
         "/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
     )
     directory_wordlist: Path = Path(
-        "/usr/share/seclists/Discovery/Web-Content/raft-small-directories-lowercase.txt"
+        "/usr/share/dirb/wordlists/common.txt"
     )
 
     @field_validator("ip")
