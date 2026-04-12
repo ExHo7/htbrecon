@@ -6,6 +6,7 @@ from htbrecon.console import console, print_error, print_phase, print_success, p
 from htbrecon.hosts import add_host
 from htbrecon.models import ReconConfig, ReconContext
 from htbrecon.scanners import (
+    api,
     bloodhound,
     eyewitness,
     ffuf_dirs,
@@ -28,7 +29,7 @@ from htbrecon.scanners import (
 
 def _setup_dirs(config: ReconConfig) -> None:
     """Create project directory structure."""
-    for subdir in ("nmap", "web", "ffuf", "nuclei", "smb", "ldap", "vulnx", "spider", "eyewitness", "kerbrute", "winrm", "ssh", "ftp", "mssql"):
+    for subdir in ("nmap", "web", "ffuf", "nuclei", "smb", "ldap", "vulnx", "spider", "eyewitness", "kerbrute", "winrm", "ssh", "ftp", "mssql", "api"):
         (config.project_dir / subdir).mkdir(parents=True, exist_ok=True)
 
 
@@ -176,6 +177,7 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
 
         phase4_tasks = []
         phase4_tasks.append(("Directory scan", ffuf_dirs.run(ctx)))
+        phase4_tasks.append(("API scan", api.run(ctx)))
         phase4_tasks.append(("Nuclei scan", nuclei.run(ctx)))
         phase4_tasks.append(("EyeWitness", eyewitness.run(ctx)))
 

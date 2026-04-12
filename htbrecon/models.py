@@ -193,6 +193,15 @@ class MssqlResult(BaseModel):
     raw_output: str = ""
 
 
+class ApiResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    endpoints: list[str] = []          # "https://host/api/v1 [200]"
+    graphql_endpoints: list[str] = []  # URLs with open introspection
+    spec_urls: list[str] = []          # Swagger / OpenAPI spec URLs
+    api_tech_hints: list[str] = []     # e.g. ["flowise", "fastapi"]
+
+
 class ReconContext:
     """Mutable shared state accumulated across the pipeline."""
 
@@ -216,6 +225,7 @@ class ReconContext:
         self.ftp: FtpResult | None = None
         self.mssql: MssqlResult | None = None
         self.eyewitness: EyeWitnessResult | None = None
+        self.api: ApiResult | None = None
         self.ai_analysis: str = ""
         self.errors: list[str] = []
 
@@ -315,7 +325,7 @@ class ReconConfig(BaseModel):
         "/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
     )
     directory_wordlist: Path = Path(
-        "/usr/share/seclists/Discovery/Web-Content/raft-small-directories-lowercase.txt"
+        "/usr/share/dirb/wordlists/common.txt"
     )
 
     @field_validator("ip")
