@@ -43,6 +43,7 @@ async def run(ctx: ReconContext) -> None:
         "-silent",
         "-severity",
         "low,medium,high,critical",
+        "-as",
     ]
 
     result = await executor.run(cmd, timeout=600)

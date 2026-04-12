@@ -72,14 +72,14 @@ async def run(ctx: ReconContext) -> None:
         "-w",
         str(wordlist),
         "-mc",
-        "200,301,302,403",
+        "200,301,302,401,403",
         "-ac",
         "-o",
         str(out_file),
         "-of",
         "json",
         "-t",
-        "50",
+        "25",
     ]
 
     if baseline_size is not None and baseline_size > 0:
