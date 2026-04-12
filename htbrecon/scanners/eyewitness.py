@@ -30,7 +30,8 @@ async def run(ctx: ReconContext) -> None:
     print_info(f"EyeWitness: screenshotting {len(urls)} URL(s)...")
 
     cmd = [
-        "eyewitness",
+        "/opt/tools/EyeWitness/venv/bin/python3",
+        "/opt/tools/EyeWitness/Python/EyeWitness.py",
         "--web",
         "-f", str(urls_file),
         "-d", str(screenshots_dir),
@@ -41,7 +42,7 @@ async def run(ctx: ReconContext) -> None:
 
     result = await executor.run(cmd, timeout=300, output_file=out_dir / "eyewitness_stdout.txt")
 
-    if result.returncode == 127:
+    if result.returncode == 127 or "No such file" in (result.stderr or ""):
         ctx.errors.append("EyeWitness not found — skipping web screenshots")
         print_warning("EyeWitness not found")
         return
