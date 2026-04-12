@@ -122,16 +122,21 @@ async def run(ctx: ReconContext) -> None:
             if any(kw in path for kw in _GRAPHQL_PATTERNS):
                 if full_url not in graphql_endpoints:
                     graphql_endpoints.append(full_url)
-                    print_finding("api", f"GraphQL endpoint: {full_url} [{status}]")
+                    suffix = " (auth required)" if status == 401 else ""
+                    print_finding("api", f"GraphQL endpoint: {full_url} [{status}]{suffix}")
             elif any(kw in path for kw in _SPEC_PATTERNS):
                 if full_url not in spec_urls:
                     spec_urls.append(full_url)
-                    print_finding("api", f"API spec: {full_url} [{status}]")
+                    suffix = " (auth required)" if status == 401 else ""
+                    print_finding("api", f"API spec: {full_url} [{status}]{suffix}")
             else:
                 label = f"{full_url} [{status}]"
                 if label not in endpoints:
                     endpoints.append(label)
-                    print_success(f"API endpoint: {full_url} [{status}]")
+                    if status == 401:
+                        print_info(f"API detected (auth required): {full_url}")
+                    else:
+                        print_success(f"API endpoint: {full_url} [{status}]")
 
     ctx.api = ApiResult(
         endpoints=endpoints,
