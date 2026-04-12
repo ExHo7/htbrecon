@@ -115,6 +115,13 @@ def _build_prompt(ctx: ReconContext) -> str:
     # Products rarely exploitable on HTB — keep in full report but skip in AI prompt
     _HTB_LOW_SIGNAL = frozenset({"nginx", "openssh", "openssl", "http_server"})
 
+    if ctx.katana and ctx.katana.interesting_urls:
+        sections.append(
+            f"Katana crawl — {len(ctx.katana.urls_found)} URL(s) crawled, "
+            f"{len(ctx.katana.interesting_urls)} interesting:\n" +
+            "\n".join(f"  {u}" for u in ctx.katana.interesting_urls[:30])
+        )
+
     if ctx.vulnx and ctx.vulnx.findings:
         actionable = [f for f in ctx.vulnx.findings if f.product not in _HTB_LOW_SIGNAL]
         kev = [f for f in actionable if f.is_kev]
