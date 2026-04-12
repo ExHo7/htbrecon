@@ -193,6 +193,14 @@ class MssqlResult(BaseModel):
     raw_output: str = ""
 
 
+class KatanaResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    urls_found: list[str] = []
+    interesting_urls: list[str] = []
+    output_file: str = ""
+
+
 class ApiResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -226,6 +234,7 @@ class ReconContext:
         self.mssql: MssqlResult | None = None
         self.eyewitness: EyeWitnessResult | None = None
         self.api: ApiResult | None = None
+        self.katana: KatanaResult | None = None
         self.ai_analysis: str = ""
         self.errors: list[str] = []
 

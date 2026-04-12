@@ -422,6 +422,27 @@ No API endpoints discovered.
 
 ---
 
+## Web Crawl (Katana)
+
+{% if katana and katana.urls_found %}
+**{{ katana.urls_found | length }} URL(s) crawled** — {{ katana.interesting_urls | length }} interesting
+
+{% if katana.interesting_urls %}
+### Interesting URLs
+{% for u in katana.interesting_urls %}
+- {{ u }}
+{% endfor %}
+{% endif %}
+
+Full results: `{{ katana.output_file }}`
+{% elif katana %}
+Katana ran but found no URLs.
+{% else %}
+Katana not run (no HTTP ports detected).
+{% endif %}
+
+---
+
 ## Web Screenshots (EyeWitness)
 
 {% if eyewitness and eyewitness.screenshots_count > 0 %}
@@ -483,6 +504,7 @@ def generate(ctx: ReconContext) -> Path:
         mssql=ctx.mssql,
         eyewitness=ctx.eyewitness,
         api=ctx.api,
+        katana=ctx.katana,
         ai_analysis=ctx.ai_analysis,
         errors=ctx.errors,
     )
