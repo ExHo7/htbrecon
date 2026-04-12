@@ -215,7 +215,7 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
     # ── Phase 5: AI Analysis ────────────────────────────────────
     if not config.skip_ai:
         print_phase("AI Analysis")
-        with console.status("[bold cyan]Analyzing findings with Claude...🤖", spinner="dots"):
+        with console.status("[bold cyan]Analyzing findings with AI...🤖", spinner="dots"):
             from htbrecon.ai import analyze
 
             try:

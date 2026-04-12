@@ -23,7 +23,7 @@ def run(
     credentials: Optional[str] = typer.Option(
         None, "--credentials", help="Credentials in user:password format"
     ),
-    skip_ai: bool = typer.Option(False, "--skip-ai", help="Skip Claude AI analysis"),
+    skip_ai: bool = typer.Option(False, "--skip-ai", help="Skip AI analysis"),
     debug: bool = typer.Option(False, "--debug", help="Enable debug output"),
 ) -> None:
     """Run automated reconnaissance against a target machine."""

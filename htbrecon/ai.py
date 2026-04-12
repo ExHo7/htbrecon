@@ -7,7 +7,7 @@ from htbrecon.models import ReconContext
 
 
 def _build_prompt(ctx: ReconContext) -> str:
-    """Build a concise summary of findings for Claude to analyze."""
+    """Build a concise summary of findings for AI to analyze."""
     sections: list[str] = []
 
     sections.append(f"Target: {ctx.config.ip} ({ctx.config.hostname})")
