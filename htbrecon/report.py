@@ -386,6 +386,40 @@ Kerbrute not run (credentials provided or port 88 not detected).
 
 ---
 
+## API Endpoints
+
+{% if api and (api.endpoints or api.graphql_endpoints or api.spec_urls) %}
+{% if api.api_tech_hints %}
+**Detected API tech:** {{ api.api_tech_hints | join(", ") }}
+{% endif %}
+
+{% if api.spec_urls %}
+### API Specs (Swagger / OpenAPI)
+{% for s in api.spec_urls %}
+- {{ s }}
+{% endfor %}
+{% endif %}
+
+{% if api.graphql_endpoints %}
+### GraphQL (introspection open)
+{% for g in api.graphql_endpoints %}
+- **{{ g }}** ← introspection enabled
+{% endfor %}
+{% endif %}
+
+{% if api.endpoints %}
+### Discovered Endpoints ({{ api.endpoints | length }})
+{% for e in api.endpoints %}
+- {{ e }}
+{% endfor %}
+{% endif %}
+
+{% else %}
+No API endpoints discovered.
+{% endif %}
+
+---
+
 ## Web Screenshots (EyeWitness)
 
 {% if eyewitness and eyewitness.screenshots_count > 0 %}
@@ -446,6 +480,7 @@ def generate(ctx: ReconContext) -> Path:
         ftp=ctx.ftp,
         mssql=ctx.mssql,
         eyewitness=ctx.eyewitness,
+        api=ctx.api,
         ai_analysis=ctx.ai_analysis,
         errors=ctx.errors,
     )

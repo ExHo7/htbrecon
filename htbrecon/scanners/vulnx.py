@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 
@@ -8,21 +9,19 @@ from htbrecon.console import logger, print_finding, print_info, print_warning
 from htbrecon.executor import run
 from htbrecon.models import CveInfo, ReconContext, VulnxResult
 
-# Nmap version strings often look like "Apache httpd 2.4.51 ((Unix))"
-_NMAP_VERSION_RE = re.compile(r"^([\w\-]+(?:\s[\w\-]+)?)\s+(\d+[\d.]+)", re.IGNORECASE)
-
 # Pure metadata/HTTP plugins — not real products to search CVEs for
 _SKIP_PLUGINS = frozenset({
     "HTTPServer", "X-Powered-By", "X-Frame-Options", "Strict-Transport-Security",
     "X-Content-Type-Options", "Content-Security-Policy", "X-XSS-Protection",
     "Via-Proxy", "RedirectLocation", "IP", "Country", "Title", "Meta-Author",
     "Meta-Generator", "Email", "Script", "Frame", "Cookies", "HTML5",
-    "Bootstrap", "JQuery", "jQuery", "UncommonHeaders",
+    "Bootstrap", "JQuery", "jQuery", "UncommonHeaders", "Open-Graph-Protocol",
+    "OpenGraph", "Facebook", "Twitter",
 })
 
-# Vendor normalisation map: plugin name → (vendor, product)
+# Minimal static fallback map (used when AI is unavailable)
 _VENDOR_MAP: dict[str, tuple[str, str]] = {
-    "Apache": ("apache", "apache"),
+    "Apache": ("apache", "http_server"),
     "Nginx": ("nginx", "nginx"),
     "nginx": ("nginx", "nginx"),
     "IIS": ("microsoft", "iis"),
@@ -31,24 +30,44 @@ _VENDOR_MAP: dict[str, tuple[str, str]] = {
     "Drupal": ("drupal", "drupal"),
     "PHP": ("php", "php"),
     "OpenSSL": ("openssl", "openssl"),
+    "OpenSSH": ("openbsd", "openssh"),
     "Tomcat": ("apache", "tomcat"),
     "Jenkins": ("jenkins", "jenkins"),
     "GitLab": ("gitlab", "gitlab"),
     "Grafana": ("grafana", "grafana"),
     "Kibana": ("elastic", "kibana"),
     "Elasticsearch": ("elastic", "elasticsearch"),
-    "Spring": ("vmware", "spring"),
-    "Rails": ("rubyonrails", "rails"),
+    "Spring": ("vmware", "spring_framework"),
+    "Rails": ("rubyonrails", "ruby_on_rails"),
     "Django": ("djangoproject", "django"),
+    "Flask": ("palletsprojects", "flask"),
+    "FastAPI": ("tiangolo", "fastapi"),
     "Express": ("expressjs", "express"),
     "Laravel": ("laravel", "laravel"),
     "Symfony": ("sensiolabs", "symfony"),
     "Magento": ("magento", "magento"),
-    "SharePoint": ("microsoft", "sharepoint"),
-    "Exchange": ("microsoft", "exchange"),
-    "Outlook": ("microsoft", "outlook"),
-    "OWA": ("microsoft", "exchange"),
+    "SharePoint": ("microsoft", "sharepoint_server"),
+    "Exchange": ("microsoft", "exchange_server"),
+    "OWA": ("microsoft", "exchange_server"),
+    "Flowise": ("flowiseai", "flowise"),
+    "FlowiseAI": ("flowiseai", "flowise"),
+    "Strapi": ("strapi", "strapi"),
+    "Directus": ("directus", "directus"),
+    "Hasura": ("hasura", "graphql_engine"),
+    "Keycloak": ("redhat", "keycloak"),
+    "Vault": ("hashicorp", "vault"),
+    "Consul": ("hashicorp", "consul"),
+    "phpMyAdmin": ("phpmyadmin", "phpmyadmin"),
+    "Webmin": ("webmin", "webmin"),
+    "cPanel": ("cpanel", "cpanel"),
+    "Plesk": ("plesk", "plesk"),
 }
+
+_NMAP_VERSION_RE = re.compile(r"^([\w\-]+(?:\s[\w\-]+)?)\s+(\d+[\d.]+)", re.IGNORECASE)
+# Artefacts nmap à ignorer (état de port, protocoles, etc.)
+_NMAP_SKIP_NAMES = frozenset({
+    "syn-ack", "tcpwrapped", "filtered", "closed", "open", "microsoft", "generic",
+})
 
 
 @dataclass
@@ -64,18 +83,90 @@ class SearchTerm:
         return f"{self.vendor}/{self.product}"
 
 
-def _extract_from_whatweb(ctx: ReconContext) -> list[SearchTerm]:
-    """Parse all WhatWeb results (main host + subdomains) into structured search terms.
+# ── AI-based tech normalisation ────────────────────────────────────────────────
 
-    - "nginx[1.24.0]"   → SearchTerm(nginx, nginx, 1.24.0)
-    - "WordPress[6.1]"  → SearchTerm(wordpress, wordpress, 6.1)
-    - "Title[...]", "HTML5", "Script", etc. → ignored
+_AI_SYSTEM_PROMPT = """\
+You are a security tool assistant. Your job is to normalize web technology fingerprints
+into structured CPE-compatible (vendor, product, version) tuples for NVD/CVE lookup.
+
+Rules:
+- Return ONLY a JSON array, no prose, no markdown fences.
+- Each item: {"vendor": "...", "product": "...", "version": "..."}
+- version is "" if unknown.
+- Skip pure metadata: HTML5, HTTP headers, IP addresses, page titles, social meta-tags,
+  Open Graph, unrecognized strings, port states (syn-ack, tcpwrapped).
+- Normalize vendor/product to lowercase, use underscores for spaces.
+- Use NVD CPE conventions: e.g. nginx→nginx/nginx, PHP→php/php,
+  Apache httpd→apache/http_server, OpenSSH→openbsd/openssh,
+  FlowiseAI→flowiseai/flowise, WordPress→wordpress/wordpress.
+- If a Meta-Author or plugin name clearly identifies a known product, include it.
+- Never invent CVEs or products you don't recognise — omit them instead."""
+
+
+async def _normalize_with_ai(raw_technologies: list[str], nmap_versions: list[str]) -> list[SearchTerm] | None:
+    """Use Claude Haiku to parse and normalize detected technologies.
+
+    Returns None if AI is unavailable (no API key, import error, or exception).
     """
-    terms: list[SearchTerm] = []
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
 
+    try:
+        import anthropic
+    except ImportError:
+        return None
+
+    payload = {
+        "whatweb_plugins": raw_technologies,
+        "nmap_service_versions": nmap_versions,
+    }
+    user_msg = (
+        "Normalize these detected technologies for NVD CVE lookup.\n"
+        f"Input: {json.dumps(payload, ensure_ascii=False)}"
+    )
+
+    try:
+        client = anthropic.AsyncAnthropic(api_key=api_key)
+        response = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            system=_AI_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        if not response.content:
+            return None
+        raw = response.content[0]
+        text = raw.text if hasattr(raw, "text") else ""
+
+        # Strip accidental markdown fences
+        text = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
+
+        data = json.loads(text)
+        terms: list[SearchTerm] = []
+        for item in data:
+            vendor = str(item.get("vendor", "")).strip().lower()
+            product = str(item.get("product", "")).strip().lower()
+            version = str(item.get("version", "")).strip()
+            if vendor and product:
+                terms.append(SearchTerm(vendor=vendor, product=product, version=version))
+        return terms
+    except Exception as exc:
+        logger.debug("AI tech normalisation failed: %s", exc)
+        return None
+
+
+# ── Static fallback extractors ─────────────────────────────────────────────────
+
+def _extract_from_whatweb_static(ctx: ReconContext) -> list[SearchTerm]:
+    """Static fallback: parse WhatWeb results using _VENDOR_MAP."""
+    terms: list[SearchTerm] = []
     for wwresult in ctx.whatweb:
         for tech in wwresult.technologies:
             tech = tech.strip()
+            # Strip multi-line artefacts: take only the part before any newline
+            tech = tech.splitlines()[0].strip()
+
             if "[" in tech:
                 plugin = tech[:tech.index("[")].strip()
                 value = tech[tech.index("[") + 1:tech.rindex("]")].strip() if "]" in tech else ""
@@ -94,15 +185,14 @@ def _extract_from_whatweb(ctx: ReconContext) -> list[SearchTerm]:
 
             version = ""
             if value and re.match(r"^\d", value):
-                version = value.split()[0]  # "1.24.0 (Ubuntu)" → "1.24.0"
+                version = value.split()[0]
 
             terms.append(SearchTerm(vendor=vendor, product=product, version=version))
-
     return terms
 
 
-def _extract_from_nmap(ctx: ReconContext) -> list[SearchTerm]:
-    """Parse nmap service version strings into SearchTerms."""
+def _extract_from_nmap_static(ctx: ReconContext) -> list[SearchTerm]:
+    """Static fallback: parse nmap service version strings."""
     terms: list[SearchTerm] = []
     for port in ctx.open_ports:
         if not port.version:
@@ -112,8 +202,9 @@ def _extract_from_nmap(ctx: ReconContext) -> list[SearchTerm]:
             continue
         raw_name = m.group(1).strip()
         version = m.group(2)
-        # Normalise: "Apache httpd" → "apache", "OpenSSH" → "openssh"
-        name = raw_name.split()[0]  # take first word
+        name = raw_name.split()[0]
+        if name.lower() in _NMAP_SKIP_NAMES:
+            continue
         if name in _VENDOR_MAP:
             vendor, product = _VENDOR_MAP[name]
         else:
@@ -121,6 +212,23 @@ def _extract_from_nmap(ctx: ReconContext) -> list[SearchTerm]:
             product = name.lower()
         terms.append(SearchTerm(vendor=vendor, product=product, version=version))
     return terms
+
+
+def _collect_raw_inputs(ctx: ReconContext) -> tuple[list[str], list[str]]:
+    """Collect raw technology strings from WhatWeb and nmap for AI normalisation."""
+    whatweb_techs: list[str] = []
+    for wwresult in ctx.whatweb:
+        for tech in wwresult.technologies:
+            # Collapse multi-line WhatWeb artefacts before sending to AI
+            tech = " ".join(tech.splitlines()).strip()
+            whatweb_techs.append(tech)
+
+    nmap_versions: list[str] = []
+    for port in ctx.open_ports:
+        if port.version:
+            nmap_versions.append(f"{port.service} {port.version}".strip())
+
+    return whatweb_techs, nmap_versions
 
 
 def _deduplicate_struct(terms: list[SearchTerm]) -> list[SearchTerm]:
@@ -132,6 +240,8 @@ def _deduplicate_struct(terms: list[SearchTerm]) -> list[SearchTerm]:
             seen[key] = t
     return list(seen.values())
 
+
+# ── vulnx search ──────────────────────────────────────────────────────────────
 
 def _parse_vulnx_json(raw: str, product: str) -> list[CveInfo]:
     """Parse vulnx --json output into CveInfo list."""
@@ -185,9 +295,22 @@ async def run_vulnx(ctx: ReconContext) -> None:
     """Run vulnx CVE search for all detected technologies."""
     import asyncio
 
-    struct_ww = _extract_from_whatweb(ctx)
-    struct_nmap = _extract_from_nmap(ctx)
-    all_terms = _deduplicate_struct(struct_ww + struct_nmap)
+    whatweb_techs, nmap_versions = _collect_raw_inputs(ctx)
+
+    # Try AI-based normalisation first
+    ai_terms = await _normalize_with_ai(whatweb_techs, nmap_versions)
+
+    if ai_terms is not None:
+        print_info("vulnx: using AI-based technology normalisation")
+        all_terms = _deduplicate_struct(ai_terms)
+    else:
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            print_warning("vulnx: AI normalisation failed — falling back to static parser")
+        else:
+            print_info("vulnx: no API key — using static technology parser")
+        struct_ww = _extract_from_whatweb_static(ctx)
+        struct_nmap = _extract_from_nmap_static(ctx)
+        all_terms = _deduplicate_struct(struct_ww + struct_nmap)
 
     if not all_terms:
         print_info("vulnx: no recognisable technologies to search")

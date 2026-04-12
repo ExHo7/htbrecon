@@ -1,4 +1,5 @@
 from htbrecon.scanners import (
+    api,
     ffuf_dirs,
     ffuf_subdomains,
     ldap,
@@ -9,6 +10,7 @@ from htbrecon.scanners import (
 )
 
 __all__ = [
+    "api",
     "ffuf_dirs",
     "ffuf_subdomains",
     "ldap",
