@@ -243,17 +243,15 @@ def _deduplicate_struct(terms: list[SearchTerm]) -> list[SearchTerm]:
 
 # ── vulnx search ──────────────────────────────────────────────────────────────
 
-def _parse_vulnx_jsonl(raw: str, product: str) -> list[CveInfo]:
-    """Parse vulnx --jsonl output (one JSON object per line) into CveInfo list."""
+def _parse_vulnx_json(raw: str, product: str) -> list[CveInfo]:
+    """Parse vulnx --json output into CveInfo list."""
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+
     findings: list[CveInfo] = []
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            r = json.loads(line)
-        except json.JSONDecodeError:
-            continue
+    for r in data.get("results", []):
         cve_id = r.get("cve_id") or r.get("doc_id", "")
         if not cve_id:
             continue
@@ -290,7 +288,7 @@ async def _search_structured(term: SearchTerm) -> list[CveInfo]:
     query = _build_query(term)
     base_cmd = [
         "vulnx", "search", query,
-        "--jsonl", "--silent",
+        "--json", "--silent", "--disable-update-check",
         "--severity", "critical,high,medium",
         "--sort-desc", "cvss_score",
         "-n", "15",
@@ -298,22 +296,22 @@ async def _search_structured(term: SearchTerm) -> list[CveInfo]:
 
     # Tier 1: KEV + PoC + remote exploit (the gold)
     result = await run(base_cmd + ["--kev", "--poc", "--remote-exploit"], timeout=30)
-    findings = _parse_vulnx_jsonl(result.stdout, term.product)
+    findings = _parse_vulnx_json(result.stdout, term.product)
 
     # Tier 2: PoC + remote (no KEV requirement)
     if not findings:
         result = await run(base_cmd + ["--poc", "--remote-exploit"], timeout=30)
-        findings = _parse_vulnx_jsonl(result.stdout, term.product)
+        findings = _parse_vulnx_json(result.stdout, term.product)
 
     # Tier 3: has Nuclei template (actionable for automated scanning)
     if not findings:
         result = await run(base_cmd + ["--template"], timeout=30)
-        findings = _parse_vulnx_jsonl(result.stdout, term.product)
+        findings = _parse_vulnx_json(result.stdout, term.product)
 
     # Tier 4: broad search (no exploit filters)
     if not findings:
         result = await run(base_cmd, timeout=30)
-        findings = _parse_vulnx_jsonl(result.stdout, term.product)
+        findings = _parse_vulnx_json(result.stdout, term.product)
 
     if findings:
         logger.debug("vulnx %s: %d CVE(s)", term, len(findings))
