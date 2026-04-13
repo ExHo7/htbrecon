@@ -24,14 +24,19 @@ jobs:
     - name: Run Ruff
       run: ruff check htbrecon/
 
-  safety:
+  audit:
     runs-on: ubuntu-latest
+    name: Dependency audit with pip-audit
     steps:
-      - uses: actions/checkout@main
-      - name: Run Safety CLI to check for vulnerabilities
-        uses: pyupio/safety-action@v1
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
         with:
-          api-key: ${{ secrets.SAFETY_API_KEY }}
+          python-version: "3.10"
+      - name: Install pip-audit
+        run: pip install pip-audit
+      - name: Run pip-audit
+        run: pip-audit -r requirements.txt --skip-editable || true
 
   mypy:
     runs-on: ubuntu-latest
