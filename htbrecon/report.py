@@ -82,10 +82,10 @@ Directory scanning not performed.
 {% if vulnx and vulnx.findings %}
 **Technologies searched:** {{ vulnx.searched_terms | join(", ") }}
 
-| Severity | CVE ID | CVSS | Product | PoC | KEV | Description |
-|----------|--------|------|---------|-----|-----|-------------|
+| Severity | CVE ID | CVSS | EPSS | Product | PoC | KEV | Nuclei | Description |
+|----------|--------|------|------|---------|-----|-----|--------|-------------|
 {% for f in vulnx.findings %}
-| {{ f.severity | upper }} | {{ f.cve_id }} | {{ "%.1f" | format(f.cvss_score) }} | {{ f.product }} | {{ "✓" if f.is_poc else "–" }} | {{ "✓" if f.is_kev else "–" }} | {{ f.description[:100] }}{% if f.description | length > 100 %}…{% endif %} |
+| {{ f.severity | upper }} | {{ f.cve_id }} | {{ "%.1f" | format(f.cvss_score) }} | {{ "%.2f" | format(f.epss_score) }} | {{ f.product }} | {{ "✓" if f.is_poc else "–" }} | {{ "✓" if f.is_kev else "–" }} | {{ "✓" if f.has_nuclei_template else "–" }} | {{ f.description[:100] }}{% if f.description | length > 100 %}…{% endif %} |
 {% endfor %}
 {% else %}
 No CVE intelligence gathered (no recognised technologies or vulnx unavailable).

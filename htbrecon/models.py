@@ -62,11 +62,13 @@ class CveInfo(BaseModel):
     cve_id: str
     severity: str
     cvss_score: float = 0.0
+    epss_score: float = 0.0
     description: str = ""
     product: str = ""
     is_poc: bool = False
     is_kev: bool = False
     is_remote: bool = False
+    has_nuclei_template: bool = False
 
 
 class VulnxResult(BaseModel):

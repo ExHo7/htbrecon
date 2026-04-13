@@ -243,15 +243,17 @@ def _deduplicate_struct(terms: list[SearchTerm]) -> list[SearchTerm]:
 
 # ── vulnx search ──────────────────────────────────────────────────────────────
 
-def _parse_vulnx_json(raw: str, product: str) -> list[CveInfo]:
-    """Parse vulnx --json output into CveInfo list."""
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        return []
-
+def _parse_vulnx_jsonl(raw: str, product: str) -> list[CveInfo]:
+    """Parse vulnx --jsonl output (one JSON object per line) into CveInfo list."""
     findings: list[CveInfo] = []
-    for r in data.get("results", []):
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            r = json.loads(line)
+        except json.JSONDecodeError:
+            continue
         cve_id = r.get("cve_id") or r.get("doc_id", "")
         if not cve_id:
             continue
@@ -260,32 +262,59 @@ def _parse_vulnx_json(raw: str, product: str) -> list[CveInfo]:
                 cve_id=cve_id,
                 severity=r.get("severity", "unknown"),
                 cvss_score=float(r.get("cvss_score") or 0.0),
+                epss_score=float(r.get("epss_score") or 0.0),
                 description=r.get("description", "")[:200],
                 product=product,
                 is_poc=bool(r.get("is_poc", False)),
                 is_kev=bool(r.get("is_kev", False)),
                 is_remote=bool(r.get("is_remote", False)),
+                has_nuclei_template=bool(r.get("is_template", False)),
             )
         )
     return findings
 
 
-async def _search_structured(term: SearchTerm) -> list[CveInfo]:
-    """Search by vendor/product with strict→relaxed fallback."""
-    base_cmd = [
-        "vulnx", "search",
-        "--json", "--silent", "--disable-update-check",
-        "--vendor", term.vendor,
-        "--product", term.product,
-        "--severity", "critical,high,medium",
-        "-n", "10",
+def _build_query(term: SearchTerm) -> str:
+    """Build a vulnx search query string from a SearchTerm."""
+    parts = [
+        f"affected_products.vendor:{term.vendor}",
+        f"affected_products.product:{term.product}",
     ]
-    # Strict first: PoC + remotely exploitable
-    result = await run(base_cmd + ["--poc", "--remote-exploit"], timeout=30)
-    findings = _parse_vulnx_json(result.stdout, term.product)
+    if term.version:
+        parts.append(f"affected_products.version:{term.version}")
+    return " && ".join(parts)
+
+
+async def _search_structured(term: SearchTerm) -> list[CveInfo]:
+    """Search by vendor/product using vulnx query syntax with tiered fallback."""
+    query = _build_query(term)
+    base_cmd = [
+        "vulnx", "search", query,
+        "--jsonl", "--silent",
+        "--severity", "critical,high,medium",
+        "--sort-desc", "cvss_score",
+        "-n", "15",
+    ]
+
+    # Tier 1: KEV + PoC + remote exploit (the gold)
+    result = await run(base_cmd + ["--kev", "--poc", "--remote-exploit"], timeout=30)
+    findings = _parse_vulnx_jsonl(result.stdout, term.product)
+
+    # Tier 2: PoC + remote (no KEV requirement)
+    if not findings:
+        result = await run(base_cmd + ["--poc", "--remote-exploit"], timeout=30)
+        findings = _parse_vulnx_jsonl(result.stdout, term.product)
+
+    # Tier 3: has Nuclei template (actionable for automated scanning)
+    if not findings:
+        result = await run(base_cmd + ["--template"], timeout=30)
+        findings = _parse_vulnx_jsonl(result.stdout, term.product)
+
+    # Tier 4: broad search (no exploit filters)
     if not findings:
         result = await run(base_cmd, timeout=30)
-        findings = _parse_vulnx_json(result.stdout, term.product)
+        findings = _parse_vulnx_jsonl(result.stdout, term.product)
+
     if findings:
         logger.debug("vulnx %s: %d CVE(s)", term, len(findings))
     return findings
