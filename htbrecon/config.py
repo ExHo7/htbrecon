@@ -10,6 +10,7 @@ def build_config(
     credentials: str | None = None,
     skip_ai: bool = False,
     debug: bool = False,
+    html: bool = False,
     base_dir: Path | None = None,
 ) -> ReconConfig:
     """Build a ReconConfig from CLI arguments."""
@@ -33,5 +34,6 @@ def build_config(
         credentials=creds,
         skip_ai=skip_ai,
         debug=debug,
+        html=html,
         project_dir=project_dir,
     )

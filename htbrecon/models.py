@@ -331,6 +331,7 @@ class ReconConfig(BaseModel):
     credentials: tuple[str, str] | None = None
     skip_ai: bool = False
     debug: bool = False
+    html: bool = False
     project_dir: Path = Path(".")
     subdomain_wordlist: Path = Path(
         "/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
