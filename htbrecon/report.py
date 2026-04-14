@@ -603,6 +603,47 @@ No errors encountered.
 )
 
 
+def _embed_eyewitness_screenshots(html: str, ctx: ReconContext) -> str:
+    """Append base64-embedded screenshots after the EyeWitness section in the HTML."""
+    import base64
+
+    screens_dir = ctx.config.project_dir / "eyewitness" / "screenshots" / "screens"
+    if not screens_dir.exists():
+        return html
+
+    pngs = sorted(screens_dir.glob("*.png"))
+    if not pngs:
+        return html
+
+    imgs = []
+    for png in pngs:
+        b64 = base64.b64encode(png.read_bytes()).decode()
+        label = png.stem.replace("_", " ").replace(".", " ")
+        imgs.append(
+            f'<div style="margin:0.8rem 0;">'
+            f'<p style="color:var(--subtext);font-size:0.85em;margin-bottom:0.3rem;">{label}</p>'
+            f'<img src="data:image/png;base64,{b64}" '
+            f'style="max-width:100%;border:1px solid var(--surface);border-radius:6px;" />'
+            f'</div>'
+        )
+
+    gallery = (
+        '<div style="margin-top:1rem;">'
+        + "\n".join(imgs)
+        + "</div>"
+    )
+
+    # Insert gallery right after the EyeWitness section heading
+    marker = "<h2>Web Screenshots (EyeWitness)</h2>"
+    if marker in html:
+        html = html.replace(marker, marker + "\n" + gallery, 1)
+    else:
+        # Fallback: append at end of body
+        html = html.replace("</body>", gallery + "\n</body>")
+
+    return html
+
+
 def generate_html(ctx: ReconContext) -> Path:
     """Convert the Markdown report to a self-contained HTML file and return its path."""
     try:
@@ -619,6 +660,7 @@ def generate_html(ctx: ReconContext) -> Path:
     body = mistune.html(md_content)
 
     html = _HTML_WRAPPER.format(title=ctx.config.hostname, body=body)
+    html = _embed_eyewitness_screenshots(html, ctx)
     html_path.write_text(html, encoding="utf-8")
     return html_path
 
