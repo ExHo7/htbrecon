@@ -7,6 +7,131 @@ from jinja2 import Template
 
 from htbrecon.models import ReconContext
 
+_HTML_WRAPPER = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTBRecon — {title}</title>
+<style>
+  :root {{
+    --bg: #1e1e2e;
+    --bg2: #181825;
+    --surface: #313244;
+    --surface2: #45475a;
+    --text: #cdd6f4;
+    --subtext: #a6adc8;
+    --critical: #f38ba8;
+    --high: #fab387;
+    --medium: #f9e2af;
+    --low: #89b4fa;
+    --info: #a6e3a1;
+    --accent: #cba6f7;
+    --green: #a6e3a1;
+    --teal: #94e2d5;
+  }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+  }}
+  h1 {{ color: var(--accent); font-size: 2rem; margin: 1.5rem 0 0.5rem; border-bottom: 2px solid var(--surface); padding-bottom: 0.4rem; }}
+  h2 {{ color: var(--teal); font-size: 1.4rem; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid var(--surface); padding-bottom: 0.3rem; }}
+  h3 {{ color: var(--low); font-size: 1.1rem; margin: 1.2rem 0 0.4rem; }}
+  p {{ margin: 0.5rem 0; }}
+  a {{ color: var(--accent); text-decoration: none; }}
+  a:hover {{ text-decoration: underline; }}
+  hr {{ border: none; border-top: 1px solid var(--surface); margin: 1.5rem 0; }}
+  ul, ol {{ padding-left: 1.5rem; margin: 0.5rem 0; }}
+  li {{ margin: 0.2rem 0; }}
+  strong {{ color: var(--text); font-weight: 600; }}
+  em {{ color: var(--subtext); }}
+  code {{
+    background: var(--bg2);
+    color: var(--accent);
+    padding: 0.1em 0.4em;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.88em;
+  }}
+  pre {{
+    background: var(--bg2);
+    border: 1px solid var(--surface);
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 0.8rem 0;
+  }}
+  pre code {{
+    background: none;
+    padding: 0;
+    color: var(--text);
+    font-size: 0.85em;
+  }}
+  table {{
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.8rem 0;
+    font-size: 0.9em;
+  }}
+  thead tr {{
+    background: var(--surface);
+  }}
+  th {{
+    color: var(--teal);
+    font-weight: 600;
+    text-align: left;
+    padding: 0.5rem 0.8rem;
+    border-bottom: 2px solid var(--surface2);
+  }}
+  td {{
+    padding: 0.4rem 0.8rem;
+    border-bottom: 1px solid var(--surface);
+    vertical-align: top;
+  }}
+  tbody tr:nth-child(even) {{ background: var(--bg2); }}
+  tbody tr:hover {{ background: var(--surface); }}
+  /* Severity colour helpers applied to table cells */
+  td:first-child {{ font-weight: 600; }}
+  tr:has(td:first-child:contains("CRITICAL")) td:first-child {{ color: var(--critical); }}
+  /* Simpler approach: colour any cell whose text is a severity word */
+  .sev-critical {{ color: var(--critical) !important; }}
+  .sev-high     {{ color: var(--high)     !important; }}
+  .sev-medium   {{ color: var(--medium)   !important; }}
+  .sev-low      {{ color: var(--low)      !important; }}
+  .sev-info     {{ color: var(--info)     !important; }}
+  blockquote {{
+    border-left: 3px solid var(--surface2);
+    padding-left: 1rem;
+    color: var(--subtext);
+    margin: 0.8rem 0;
+  }}
+</style>
+</head>
+<body>
+{body}
+<script>
+  // Colour severity cells automatically
+  document.querySelectorAll('td').forEach(td => {{
+    const t = td.textContent.trim().toUpperCase();
+    if (t === 'CRITICAL') td.classList.add('sev-critical');
+    else if (t === 'HIGH')     td.classList.add('sev-high');
+    else if (t === 'MEDIUM')   td.classList.add('sev-medium');
+    else if (t === 'LOW')      td.classList.add('sev-low');
+    else if (t === 'INFO')     td.classList.add('sev-info');
+  }});
+</script>
+</body>
+</html>
+"""
+
 REPORT_TEMPLATE = Template(
     """\
 # Reconnaissance Report: {{ config.hostname }}
@@ -82,10 +207,10 @@ Directory scanning not performed.
 {% if vulnx and vulnx.findings %}
 **Technologies searched:** {{ vulnx.searched_terms | join(", ") }}
 
-| Severity | CVE ID | CVSS | Product | PoC | KEV | Description |
-|----------|--------|------|---------|-----|-----|-------------|
+| Severity | CVE ID | CVSS | EPSS | Product | PoC | KEV | Nuclei | Description |
+|----------|--------|------|------|---------|-----|-----|--------|-------------|
 {% for f in vulnx.findings %}
-| {{ f.severity | upper }} | {{ f.cve_id }} | {{ "%.1f" | format(f.cvss_score) }} | {{ f.product }} | {{ "✓" if f.is_poc else "–" }} | {{ "✓" if f.is_kev else "–" }} | {{ f.description[:100] }}{% if f.description | length > 100 %}…{% endif %} |
+| {{ f.severity | upper }} | {{ f.cve_id }} | {{ "%.1f" | format(f.cvss_score) }} | {{ "%.2f" | format(f.epss_score) }} | {{ f.product }} | {{ "✓" if f.is_poc else "–" }} | {{ "✓" if f.is_kev else "–" }} | {{ "✓" if f.has_nuclei_template else "–" }} | {{ f.description[:100] }}{% if f.description | length > 100 %}…{% endif %} |
 {% endfor %}
 {% else %}
 No CVE intelligence gathered (no recognised technologies or vulnx unavailable).
@@ -476,6 +601,26 @@ No errors encountered.
 {% endif %}
 """
 )
+
+
+def generate_html(ctx: ReconContext) -> Path:
+    """Convert the Markdown report to a self-contained HTML file and return its path."""
+    try:
+        import mistune
+    except ImportError:
+        raise RuntimeError(
+            "mistune is required for HTML export — run: pip install mistune"
+        )
+
+    md_path = ctx.config.project_dir / "report.md"
+    html_path = ctx.config.project_dir / "report.html"
+
+    md_content = md_path.read_text(encoding="utf-8")
+    body = mistune.html(md_content)
+
+    html = _HTML_WRAPPER.format(title=ctx.config.hostname, body=body)
+    html_path.write_text(html, encoding="utf-8")
+    return html_path
 
 
 def generate(ctx: ReconContext) -> Path:

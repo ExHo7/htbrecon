@@ -13,6 +13,7 @@ dependencies = [
     "pydantic>=2.12.5",
     "jinja2>=3.1.6",
     "anthropic>=0.40",
+    "mistune>=3.0",
 ]
 
 [project.scripts]

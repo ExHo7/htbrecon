@@ -25,6 +25,7 @@ def run(
     ),
     skip_ai: bool = typer.Option(False, "--skip-ai", help="Skip AI analysis"),
     debug: bool = typer.Option(False, "--debug", help="Enable debug output"),
+    html: bool = typer.Option(False, "--html", help="Generate HTML report and open in Firefox"),
 ) -> None:
     """Run automated reconnaissance against a target machine."""
     try:
@@ -35,6 +36,7 @@ def run(
             credentials=credentials,
             skip_ai=skip_ai,
             debug=debug,
+            html=html,
         )
     except ValueError as e:
         print_error(str(e))
