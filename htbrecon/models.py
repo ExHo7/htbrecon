@@ -14,6 +14,8 @@ class PortInfo(BaseModel):
     state: str
     service: str
     version: str = ""
+    product: str = ""        # nmap <service product=> e.g. "Apache httpd"
+    cpe: list[str] = []      # nmap CPEs e.g. ["cpe:/a:apache:http_server:2.4.41"]
 
 
 class NmapResult(BaseModel):

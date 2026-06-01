@@ -64,10 +64,39 @@ _VENDOR_MAP: dict[str, tuple[str, str]] = {
 }
 
 _NMAP_VERSION_RE = re.compile(r"^([\w\-]+(?:\s[\w\-]+)?)\s+(\d+[\d.]+)", re.IGNORECASE)
-# Artefacts nmap à ignorer (état de port, protocoles, etc.)
+# Artefacts nmap à ignorer (état de port, protocoles, etc.).
+# NB: "microsoft"/"generic" volontairement absents — ils bloquaient des vrais
+# produits (Microsoft IIS, …). Le CPE structuré est désormais prioritaire.
 _NMAP_SKIP_NAMES = frozenset({
-    "syn-ack", "tcpwrapped", "filtered", "closed", "open", "microsoft", "generic",
+    "syn-ack", "tcpwrapped", "filtered", "closed", "open",
 })
+
+
+def _cpe_to_term(cpe: str) -> SearchTerm | None:
+    """Parse an nmap CPE (2.2 ``cpe:/a:...`` or 2.3 ``cpe:2.3:a:...``) into a
+    SearchTerm. Returns None for non application/OS CPEs or malformed input."""
+    parts = cpe.split(":")
+    if cpe.startswith("cpe:2.3:"):
+        # cpe:2.3:<part>:<vendor>:<product>:<version>:...
+        if len(parts) < 5:
+            return None
+        kind, vendor, product = parts[2], parts[3], parts[4]
+        version = parts[5] if len(parts) > 5 else ""
+    else:
+        # cpe:/<part>:<vendor>:<product>:<version>
+        if len(parts) < 4:
+            return None
+        kind = parts[1].lstrip("/")
+        vendor, product = parts[2], parts[3]
+        version = parts[4] if len(parts) > 4 else ""
+    if kind not in ("a", "o"):
+        return None
+    vendor, product = vendor.strip().lower(), product.strip().lower()
+    if not vendor or not product:
+        return None
+    if version in ("*", "-", ""):
+        version = ""
+    return SearchTerm(vendor=vendor, product=product, version=version)
 
 
 @dataclass
@@ -100,6 +129,9 @@ Rules:
   Apache httpd→apache/http_server, OpenSSH→openbsd/openssh,
   FlowiseAI→flowiseai/flowise, WordPress→wordpress/wordpress.
 - If a Meta-Author or plugin name clearly identifies a known product, include it.
+- nmap_service_versions entries may be CPE strings (cpe:/a:vendor:product:version
+  or cpe:2.3:a:vendor:product:version). These are authoritative — extract
+  vendor/product/version directly from them.
 - Never invent CVEs or products you don't recognise — omit them instead."""
 
 
@@ -192,9 +224,19 @@ def _extract_from_whatweb_static(ctx: ReconContext) -> list[SearchTerm]:
 
 
 def _extract_from_nmap_static(ctx: ReconContext) -> list[SearchTerm]:
-    """Static fallback: parse nmap service version strings."""
+    """Static fallback: derive search terms from nmap data.
+
+    Prefers the structured CPE (clean vendor/product/version); falls back to a
+    regex over the version display string only when no CPE is available.
+    """
     terms: list[SearchTerm] = []
     for port in ctx.open_ports:
+        # Preferred: nmap CPEs already carry vendor/product/version.
+        cpe_terms = [t for t in (_cpe_to_term(c) for c in port.cpe) if t]
+        if cpe_terms:
+            terms.extend(cpe_terms)
+            continue
+
         if not port.version:
             continue
         m = _NMAP_VERSION_RE.match(port.version)
@@ -225,7 +267,11 @@ def _collect_raw_inputs(ctx: ReconContext) -> tuple[list[str], list[str]]:
 
     nmap_versions: list[str] = []
     for port in ctx.open_ports:
-        if port.version:
+        # Prefer the structured CPE(s) — they normalise far better than the
+        # free-text service/version string. Fall back to the display string.
+        if port.cpe:
+            nmap_versions.extend(port.cpe)
+        elif port.version:
             nmap_versions.append(f"{port.service} {port.version}".strip())
 
     return whatweb_techs, nmap_versions
@@ -272,27 +318,35 @@ def _parse_vulnx_json(raw: str, product: str) -> list[CveInfo]:
     return findings
 
 
-def _build_query(term: SearchTerm) -> str:
-    """Build a vulnx search query string from a SearchTerm."""
+def _build_query(term: SearchTerm, *, with_version: bool = True) -> str:
+    """Build a vulnx search query string from a SearchTerm.
+
+    ``with_version=False`` drops the version constraint — nmap's exact version
+    rarely matches NVD's version field, so a version-less query is used as a
+    last resort to keep the vendor/product hit instead of returning nothing.
+    """
     parts = [
         f"affected_products.vendor:{term.vendor}",
         f"affected_products.product:{term.product}",
     ]
-    if term.version:
+    if with_version and term.version:
         parts.append(f"affected_products.version:{term.version}")
     return " && ".join(parts)
 
 
-async def _search_structured(term: SearchTerm) -> list[CveInfo]:
-    """Search by vendor/product using vulnx query syntax with tiered fallback."""
-    query = _build_query(term)
-    base_cmd = [
+def _base_cmd(query: str) -> list[str]:
+    return [
         "vulnx", "search", query,
         "--json", "--silent", "--disable-update-check",
         "--severity", "critical,high,medium",
         "--sort-desc", "cvss_score",
         "-n", "15",
     ]
+
+
+async def _search_structured(term: SearchTerm) -> list[CveInfo]:
+    """Search by vendor/product using vulnx query syntax with tiered fallback."""
+    base_cmd = _base_cmd(_build_query(term))
 
     # Tier 1: KEV + PoC + remote exploit (the gold)
     result = await run(base_cmd + ["--kev", "--poc", "--remote-exploit"], timeout=30)
@@ -308,9 +362,14 @@ async def _search_structured(term: SearchTerm) -> list[CveInfo]:
         result = await run(base_cmd + ["--template"], timeout=30)
         findings = _parse_vulnx_json(result.stdout, term.product)
 
-    # Tier 4: broad search (no exploit filters)
+    # Tier 4: broad search (no exploit filters, still version-pinned)
     if not findings:
         result = await run(base_cmd, timeout=30)
+        findings = _parse_vulnx_json(result.stdout, term.product)
+
+    # Tier 5: drop the version constraint (exact NVD version match is brittle)
+    if not findings and term.version:
+        result = await run(_base_cmd(_build_query(term, with_version=False)), timeout=30)
         findings = _parse_vulnx_json(result.stdout, term.product)
 
     if findings:
