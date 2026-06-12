@@ -14,6 +14,8 @@ dependencies = [
     "jinja2>=3.1.6",
     "anthropic>=0.40",
     "mistune>=3.0",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
 ]
 
 [project.scripts]

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import re
 from dataclasses import dataclass
 
+from htbrecon import llm
 from htbrecon.console import logger, print_finding, print_info, print_warning
 from htbrecon.executor import run
 from htbrecon.models import CveInfo, ReconContext, VulnxResult
@@ -253,19 +253,10 @@ async def _normalize_with_ai(
     nmap_versions: list[str],
     whatweb_raws: list[str] | None = None,
 ) -> list[SearchTerm] | None:
-    """Use Claude Haiku to parse and normalize detected technologies.
+    """Use the active LLM to parse and normalize detected technologies.
 
-    Returns None if AI is unavailable (no API key, import error, or exception).
+    Returns None if no LLM provider is available or the call/parse fails.
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return None
-
-    try:
-        import anthropic
-    except ImportError:
-        return None
-
     payload = {
         "whatweb_plugins": raw_technologies,
         "nmap_service_versions": nmap_versions,
@@ -276,25 +267,27 @@ async def _normalize_with_ai(
         f"Input: {json.dumps(payload, ensure_ascii=False)}"
     )
 
-    try:
-        client = anthropic.AsyncAnthropic(api_key=api_key)
-        response = await client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
-            system=_AI_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_msg}],
-        )
-        if not response.content:
-            return None
-        raw = response.content[0]
-        text = raw.text if hasattr(raw, "text") else ""
+    text = await llm.complete(
+        system=_AI_SYSTEM_PROMPT, user=user_msg, tier="small",
+        max_tokens=1024, json_mode=True,
+    )
+    if text is None:
+        return None
 
+    try:
         # Strip accidental markdown fences
         text = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
-
         data = json.loads(text)
+        if isinstance(data, dict):
+            if "product" in data or "vendor" in data:
+                data = [data]  # a single term emitted as a bare object
+            else:
+                # Some local models wrap the array in an object — unwrap the first list.
+                data = next((v for v in data.values() if isinstance(v, list)), [])
         terms: list[SearchTerm] = []
         for item in data:
+            if not isinstance(item, dict):
+                continue
             vendor = str(item.get("vendor", "")).strip().lower()
             product = str(item.get("product", "")).strip().lower()
             version = str(item.get("version", "")).strip()
@@ -302,7 +295,7 @@ async def _normalize_with_ai(
                 terms.append(SearchTerm(vendor=vendor, product=product, version=version))
         return terms
     except Exception as exc:
-        logger.debug("AI tech normalisation failed: %s", exc)
+        logger.debug("AI tech normalisation parse failed: %s", exc)
         return None
 
 
@@ -326,22 +319,13 @@ Rules:
 async def _ai_version_filter(
     items: list[tuple[str, str, str, str]],
 ) -> dict[str, str]:
-    """Resolve version applicability for the residual "unknown" CVEs via Claude Haiku.
+    """Resolve version applicability for the residual "unknown" CVEs via the LLM.
 
     ``items`` is a list of (cve_id, detected_version, description, remediation).
     Returns a cve_id -> "in"/"out"/"unknown" map. Returns ``{}`` (leaving every
-    item "unknown") when AI is unavailable or fails — never raises.
+    item "unknown") when no LLM provider is available or it fails — never raises.
     """
     if not items:
-        return {}
-
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return {}
-
-    try:
-        import anthropic
-    except ImportError:
         return {}
 
     payload = [
@@ -358,21 +342,18 @@ async def _ai_version_filter(
         f"Input: {json.dumps(payload, ensure_ascii=False)}"
     )
 
-    try:
-        client = anthropic.AsyncAnthropic(api_key=api_key)
-        response = await client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
-            system=_AI_VERSION_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_msg}],
-        )
-        if not response.content:
-            return {}
-        raw = response.content[0]
-        text = raw.text if hasattr(raw, "text") else ""
-        text = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
+    text = await llm.complete(
+        system=_AI_VERSION_SYSTEM_PROMPT, user=user_msg, tier="small",
+        max_tokens=1024, json_mode=True,
+    )
+    if text is None:
+        return {}
 
+    try:
+        text = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
         data = json.loads(text)
+        if not isinstance(data, dict):
+            return {}
         verdicts: dict[str, str] = {}
         for cve_id, verdict in data.items():
             verdict = str(verdict).strip().lower()
@@ -380,7 +361,7 @@ async def _ai_version_filter(
                 verdicts[cve_id] = verdict
         return verdicts
     except Exception as exc:
-        logger.debug("AI version filter failed: %s", exc)
+        logger.debug("AI version filter parse failed: %s", exc)
         return {}
 
 
@@ -625,13 +606,13 @@ async def run_vulnx(ctx: ReconContext) -> None:
     ai_terms = await _normalize_with_ai(whatweb_techs, nmap_versions, whatweb_raws)
 
     if ai_terms is not None:
-        print_info("vulnx: using AI-based technology normalisation")
+        print_info(f"vulnx: using AI-based technology normalisation ({llm.active_provider()})")
         all_terms = _deduplicate_struct(ai_terms)
     else:
-        if os.environ.get("ANTHROPIC_API_KEY"):
-            print_warning("vulnx: AI normalisation failed — falling back to static parser")
+        if llm.active_provider():
+            print_warning("vulnx: AI normalisation unavailable — falling back to static parser")
         else:
-            print_info("vulnx: no API key — using static technology parser")
+            print_info("vulnx: no LLM provider — using static technology parser")
         struct_ww = _extract_from_whatweb_static(ctx)
         struct_nmap = _extract_from_nmap_static(ctx)
         all_terms = _deduplicate_struct(struct_ww + struct_nmap)

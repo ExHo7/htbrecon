@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import os
-
+from htbrecon import llm
 from htbrecon.console import print_info, print_warning
 from htbrecon.models import ReconContext
 
@@ -179,16 +178,12 @@ Format your response in Markdown with clear sections."""
 
 
 async def analyze(ctx: ReconContext) -> str:
-    """Send aggregated findings to Claude for analysis."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        print_warning("ANTHROPIC_API_KEY not set — skipping AI analysis")
-        return ""
-
-    try:
-        import anthropic
-    except ImportError:
-        print_warning("anthropic package not installed — skipping AI analysis")
+    """Send aggregated findings to the active LLM (Anthropic or Ollama) for analysis."""
+    if llm.active_provider() is None:
+        print_warning(
+            "No LLM provider configured — skipping AI analysis "
+            "(set ANTHROPIC_API_KEY, or HTBRECON_LLM_PROVIDER=ollama + HTBRECON_OLLAMA_MODEL in .env)"
+        )
         return ""
 
     findings_summary = _build_prompt(ctx)
@@ -196,21 +191,10 @@ async def analyze(ctx: ReconContext) -> str:
         print_info("No findings to analyze")
         return ""
 
-    client = anthropic.AsyncAnthropic(api_key=api_key)
-
-    response = await client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=4096,
+    text = await llm.complete(
         system=SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": f"Analyze these reconnaissance results and suggest attack vectors:\n\n{findings_summary}",
-            }
-        ],
+        user=f"Analyze these reconnaissance results and suggest attack vectors:\n\n{findings_summary}",
+        tier="large",
+        max_tokens=4096,
     )
-
-    if not response.content:
-        return ""
-    block = response.content[0]
-    return block.text if hasattr(block, "text") else ""
+    return text or ""

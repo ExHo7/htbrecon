@@ -5,6 +5,15 @@ from typing import Optional
 
 import typer
 
+# Load .env (LLM provider, API keys, Ollama model/host) before anything reads
+# os.environ. Optional dependency — degrade gracefully if unavailable.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
+
 from htbrecon.config import build_config
 from htbrecon.console import console, print_banner, print_error
 
