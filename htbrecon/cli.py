@@ -18,7 +18,15 @@ try:
     # (e.g. an Exegol /workspace while the tool lives in /opt/tools/HTBRecon).
     load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 except ImportError:
-    pass
+    # Don't fail hard, but make the cause visible — otherwise .env silently
+    # never loads and LLM env vars look "unset".
+    import sys
+
+    print(
+        "htbrecon: python-dotenv not installed — .env will not be loaded "
+        "(pip install python-dotenv, or reinstall: pip install -e .)",
+        file=sys.stderr,
+    )
 
 from htbrecon.config import build_config
 from htbrecon.console import console, print_banner, print_error
