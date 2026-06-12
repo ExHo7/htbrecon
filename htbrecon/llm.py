@@ -148,10 +148,17 @@ async def _complete_ollama(
     if json_mode:
         payload["format"] = "json"
 
+    # Local generation is slow — a large-tier analysis on a 7-9B model can take
+    # minutes. Generous default, overridable via HTBRECON_OLLAMA_TIMEOUT (seconds).
+    try:
+        timeout = float(os.environ.get("HTBRECON_OLLAMA_TIMEOUT", "600"))
+    except ValueError:
+        timeout = 600.0
+
     try:
         import httpx
 
-        async with httpx.AsyncClient(timeout=180) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             try:
                 resp = await client.post(f"{host}/api/chat", json=payload)
                 resp.raise_for_status()
@@ -164,5 +171,6 @@ async def _complete_ollama(
         content = (data.get("message") or {}).get("content", "")
         return _strip_think(content) if content else None
     except Exception as exc:
-        logger.debug("ollama completion failed: %s", exc)
+        # Some failures (e.g. ReadTimeout) stringify to "" — log the type too.
+        logger.debug("ollama completion failed: %s: %s", type(exc).__name__, exc)
         return None

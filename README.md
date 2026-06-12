@@ -248,6 +248,7 @@ normalisation / CVE version filtering).
 | `HTBRECON_ANTHROPIC_MODEL_LARGE` | Override the Anthropic model for the final analysis. Default `claude-sonnet-4-20250514`. |
 | `OLLAMA_HOST` | Ollama base URL. Default `http://localhost:11434`. |
 | `HTBRECON_OLLAMA_MODEL` | Model name when the provider resolves to `ollama` (no default — set it in `.env`). |
+| `HTBRECON_OLLAMA_TIMEOUT` | Ollama request timeout in seconds. Default `600`. Raise if the analysis fails with `ReadTimeout`. |
 
 With no provider configured (or `--skip-ai`), AI features are skipped and the
 deterministic fallbacks are used.
