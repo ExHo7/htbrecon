@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Optional
 
 import typer
@@ -10,7 +11,12 @@ import typer
 try:
     from dotenv import load_dotenv
 
+    # First the cwd and its parents (standard behaviour)...
     load_dotenv()
+    # ...then fall back to the .env at the project root next to the installed
+    # package, so it is found even when htbrecon is run from another directory
+    # (e.g. an Exegol /workspace while the tool lives in /opt/tools/HTBRecon).
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 except ImportError:
     pass
 
