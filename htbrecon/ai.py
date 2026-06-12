@@ -127,20 +127,36 @@ def _build_prompt(ctx: ReconContext) -> str:
         kev = [f for f in actionable if f.is_kev]
         crit = [f for f in actionable if f.severity == "critical"]
         high_poc = [f for f in actionable if f.severity == "high" and f.is_poc]
+        in_range = [f for f in actionable if f.version_verdict == "in"]
+        # Build the candidate set, then surface version-matched CVEs first.
+        candidates: list = []
+        seen: set[str] = set()
+        for f in in_range + kev + crit + high_poc:
+            if f.cve_id not in seen:
+                seen.add(f.cve_id)
+                candidates.append(f)
         vuln_lines = []
-        for f in (kev + crit + high_poc)[:15]:
+        for f in candidates[:15]:
             tags = []
+            if f.version_verdict == "in":
+                tags.append("VER-MATCH")
             if f.is_kev:
                 tags.append("KEV")
             if f.is_poc:
                 tags.append("PoC")
             tag_str = f" [{', '.join(tags)}]" if tags else ""
-            vuln_lines.append(f"  {f.cve_id} (CVSS {f.cvss_score}) {f.product}: {f.description[:120]}{tag_str}")
+            line = f"  {f.cve_id} (CVSS {f.cvss_score}) {f.product}: {f.description[:120]}{tag_str}"
+            if f.poc_urls:
+                line += f"\n    PoC: {f.poc_urls[0]}"
+            if f.remediation:
+                line += f"\n    Fix: {f.remediation[:80]}"
+            vuln_lines.append(line)
         if vuln_lines:
             sections.append(
                 f"CVE intelligence — {len(actionable)} actionable CVE(s) "
                 f"(nginx/openssh excluded as low-signal for HTB) "
-                f"({len(kev)} KEV, {len(crit)} critical):\n" + "\n".join(vuln_lines)
+                f"({len(in_range)} version-matched, {len(kev)} KEV, {len(crit)} critical):\n"
+                + "\n".join(vuln_lines)
             )
 
     if ctx.config.credentials:

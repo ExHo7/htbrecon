@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -112,6 +113,114 @@ class SearchTerm:
         return f"{self.vendor}/{self.product}"
 
 
+# ── Version-range applicability ────────────────────────────────────────────────
+# vulnx exposes no structured version range (no versionStart/End, no
+# vulnerable_cpe). The affected range lives in free text: the CVE ``description``
+# (e.g. "Apache HTTP Server 2.4.17 through 2.4.67 ...") and ``remediation``
+# (e.g. "Upgrade to a version later than 2.4.67"). These helpers parse the common
+# phrasings deterministically; anything unparsable is left "unknown" and handed
+# to the AI fallback (_ai_version_filter) rather than guessed.
+
+# A dotted version token: requires at least one dot to avoid matching bare
+# numbers like CWE ids or "HTTP/2". An optional trailing letter/build is kept.
+_VER_TOKEN = r"\d+(?:\.\d+)+[a-z]?\d*"
+_VER_RE = re.compile(_VER_TOKEN, re.IGNORECASE)
+
+# "X through Y", "from X to Y", "X up to Y" — a bounded range (needs two tokens).
+_RANGE_RE = re.compile(
+    rf"({_VER_TOKEN})\s*(?:through|thru|to|up to|-|–|—)\s*({_VER_TOKEN})",
+    re.IGNORECASE,
+)
+# Exclusive upper bound: affected if detected < Y.
+_BEFORE_EXCL_RE = re.compile(
+    rf"(?:before|prior to|earlier than|older than|up to but not including)\s+v?({_VER_TOKEN})",
+    re.IGNORECASE,
+)
+# Inclusive upper bound: affected if detected <= Y.
+_BEFORE_INCL_RE = re.compile(
+    rf"(?:up to and including|up to|through)\s+v?({_VER_TOKEN})",
+    re.IGNORECASE,
+)
+# "Y and earlier" / "Y and below": affected if detected <= Y.
+_AND_EARLIER_RE = re.compile(
+    rf"({_VER_TOKEN})\s+(?:and|or)\s+(?:earlier|prior|older|below|before)",
+    re.IGNORECASE,
+)
+# Remediation fix bound: "fixed in Y" / "upgrade to Y" → affected if detected < Y.
+_FIXED_RE = re.compile(
+    rf"(?:later than|after version|fixed in|patched in|resolved in|"
+    rf"update to(?: version| a version(?: later than)?)?|"
+    rf"upgrade to(?: version| a version(?: later than)?)?)\s+v?({_VER_TOKEN})",
+    re.IGNORECASE,
+)
+
+
+def _version_tuple(v: str) -> tuple[int, ...]:
+    """Parse a version string into a comparable int tuple ("v2.4.41" → (2,4,41)).
+
+    Stops at the first non-numeric segment; returns () when nothing parses.
+    """
+    v = v.strip().lstrip("vV")
+    parts: list[int] = []
+    for seg in v.split("."):
+        m = re.match(r"\d+", seg)
+        if not m:
+            break
+        parts.append(int(m.group()))
+    return tuple(parts)
+
+
+def _cmp_version(a: str, b: str) -> int:
+    """Numeric version compare. Returns -1/0/1 (a<b / a==b / a>b)."""
+    ta, tb = _version_tuple(a), _version_tuple(b)
+    n = max(len(ta), len(tb))
+    ta += (0,) * (n - len(ta))
+    tb += (0,) * (n - len(tb))
+    return (ta > tb) - (ta < tb)
+
+
+def _extract_range_verdict(detected: str, description: str, remediation: str = "") -> str:
+    """Decide whether ``detected`` falls in a CVE's affected range.
+
+    Returns "in" (affected), "out" (not affected), or "unknown" (no parsable
+    range). High precision is preferred: only confident "out" verdicts are used
+    to drop a CVE downstream, so ambiguity stays "unknown".
+    """
+    if not detected or not _version_tuple(detected):
+        return "unknown"
+    desc = description or ""
+
+    m = _RANGE_RE.search(desc)
+    if m:
+        lo, hi = m.group(1), m.group(2)
+        in_range = _cmp_version(detected, lo) >= 0 and _cmp_version(detected, hi) <= 0
+        return "in" if in_range else "out"
+
+    m = _BEFORE_EXCL_RE.search(desc)
+    if m:
+        return "in" if _cmp_version(detected, m.group(1)) < 0 else "out"
+
+    m = _BEFORE_INCL_RE.search(desc)
+    if m:
+        return "in" if _cmp_version(detected, m.group(1)) <= 0 else "out"
+
+    m = _AND_EARLIER_RE.search(desc)
+    if m:
+        return "in" if _cmp_version(detected, m.group(1)) <= 0 else "out"
+
+    m = _FIXED_RE.search(remediation or "")
+    if m:
+        return "in" if _cmp_version(detected, m.group(1)) < 0 else "out"
+
+    # No bound keyword: if the exact detected version is named, treat as affected
+    # (covers discrete "versions X, Y, Z are affected" lists).
+    for tok in _VER_RE.finditer(desc):
+        if _cmp_version(tok.group(0), detected) == 0:
+            return "in"
+
+    return "unknown"
+
+
 # ── AI-based tech normalisation ────────────────────────────────────────────────
 
 _AI_SYSTEM_PROMPT = """\
@@ -132,10 +241,18 @@ Rules:
 - nmap_service_versions entries may be CPE strings (cpe:/a:vendor:product:version
   or cpe:2.3:a:vendor:product:version). These are authoritative — extract
   vendor/product/version directly from them.
+- whatweb_raw is the raw WhatWeb output. Mine it for web-application names AND
+  versions that the flattened plugin list loses (e.g. Server/X-Powered-By/
+  X-Generator headers, CMS version banners, login-page footers). The specific
+  web-app version is often the key target — extract it when present.
 - Never invent CVEs or products you don't recognise — omit them instead."""
 
 
-async def _normalize_with_ai(raw_technologies: list[str], nmap_versions: list[str]) -> list[SearchTerm] | None:
+async def _normalize_with_ai(
+    raw_technologies: list[str],
+    nmap_versions: list[str],
+    whatweb_raws: list[str] | None = None,
+) -> list[SearchTerm] | None:
     """Use Claude Haiku to parse and normalize detected technologies.
 
     Returns None if AI is unavailable (no API key, import error, or exception).
@@ -152,6 +269,7 @@ async def _normalize_with_ai(raw_technologies: list[str], nmap_versions: list[st
     payload = {
         "whatweb_plugins": raw_technologies,
         "nmap_service_versions": nmap_versions,
+        "whatweb_raw": whatweb_raws or [],
     }
     user_msg = (
         "Normalize these detected technologies for NVD CVE lookup.\n"
@@ -188,6 +306,84 @@ async def _normalize_with_ai(raw_technologies: list[str], nmap_versions: list[st
         return None
 
 
+_AI_VERSION_SYSTEM_PROMPT = """\
+You are a security analyst deciding whether a detected software version falls within
+the versions affected by a CVE.
+
+You receive a JSON array of items: {"cve_id", "version", "description", "remediation"}.
+For each, decide if the detected "version" is affected by that CVE, using only the
+affected-version information stated in the description/remediation text.
+
+Rules:
+- Return ONLY a JSON object mapping cve_id -> "in" | "out" | "unknown". No prose, no fences.
+- "in"  = the detected version is within the affected range.
+- "out" = the detected version is explicitly NOT affected (e.g. it is at or above the fixed version).
+- "unknown" = the text does not state enough to decide. When in doubt, use "unknown" — never guess.
+- Compare versions numerically (2.4.9 < 2.4.41 < 2.4.67), not lexically.
+- Never invent versions or CVEs."""
+
+
+async def _ai_version_filter(
+    items: list[tuple[str, str, str, str]],
+) -> dict[str, str]:
+    """Resolve version applicability for the residual "unknown" CVEs via Claude Haiku.
+
+    ``items`` is a list of (cve_id, detected_version, description, remediation).
+    Returns a cve_id -> "in"/"out"/"unknown" map. Returns ``{}`` (leaving every
+    item "unknown") when AI is unavailable or fails — never raises.
+    """
+    if not items:
+        return {}
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return {}
+
+    try:
+        import anthropic
+    except ImportError:
+        return {}
+
+    payload = [
+        {
+            "cve_id": cve_id,
+            "version": version,
+            "description": (description or "")[:400],
+            "remediation": (remediation or "")[:200],
+        }
+        for cve_id, version, description, remediation in items
+    ]
+    user_msg = (
+        "Decide version applicability for each CVE below.\n"
+        f"Input: {json.dumps(payload, ensure_ascii=False)}"
+    )
+
+    try:
+        client = anthropic.AsyncAnthropic(api_key=api_key)
+        response = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            system=_AI_VERSION_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        if not response.content:
+            return {}
+        raw = response.content[0]
+        text = raw.text if hasattr(raw, "text") else ""
+        text = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
+
+        data = json.loads(text)
+        verdicts: dict[str, str] = {}
+        for cve_id, verdict in data.items():
+            verdict = str(verdict).strip().lower()
+            if verdict in ("in", "out", "unknown"):
+                verdicts[cve_id] = verdict
+        return verdicts
+    except Exception as exc:
+        logger.debug("AI version filter failed: %s", exc)
+        return {}
+
+
 # ── Static fallback extractors ─────────────────────────────────────────────────
 
 def _extract_from_whatweb_static(ctx: ReconContext) -> list[SearchTerm]:
@@ -215,9 +411,13 @@ def _extract_from_whatweb_static(ctx: ReconContext) -> list[SearchTerm]:
                 vendor = plugin.lower()
                 product = plugin.lower()
 
+            # Capture a leading dotted version, tolerating a "v" prefix and a
+            # trailing build/suffix: "v1.4.0", "6.2.1-beta" → "1.4.0", "6.2.1".
             version = ""
-            if value and re.match(r"^\d", value):
-                version = value.split()[0]
+            if value:
+                vm = re.match(r"^v?(\d+(?:\.\d+)*)", value.strip())
+                if vm:
+                    version = vm.group(1)
 
             terms.append(SearchTerm(vendor=vendor, product=product, version=version))
     return terms
@@ -256,14 +456,23 @@ def _extract_from_nmap_static(ctx: ReconContext) -> list[SearchTerm]:
     return terms
 
 
-def _collect_raw_inputs(ctx: ReconContext) -> tuple[list[str], list[str]]:
-    """Collect raw technology strings from WhatWeb and nmap for AI normalisation."""
+def _collect_raw_inputs(ctx: ReconContext) -> tuple[list[str], list[str], list[str]]:
+    """Collect raw technology strings from WhatWeb and nmap for AI normalisation.
+
+    Returns ``(whatweb_plugins, nmap_service_versions, whatweb_raw)``. The raw
+    WhatWeb output is included (trimmed) so the AI can recover web-app versions
+    that the flattened plugin list drops — often the real HTB attack vector.
+    """
     whatweb_techs: list[str] = []
+    whatweb_raws: list[str] = []
     for wwresult in ctx.whatweb:
         for tech in wwresult.technologies:
             # Collapse multi-line WhatWeb artefacts before sending to AI
             tech = " ".join(tech.splitlines()).strip()
             whatweb_techs.append(tech)
+        if wwresult.raw_output.strip():
+            # Trim: the AI only needs the headers/version banners, not the full dump.
+            whatweb_raws.append(wwresult.raw_output.strip()[:1500])
 
     nmap_versions: list[str] = []
     for port in ctx.open_ports:
@@ -274,7 +483,7 @@ def _collect_raw_inputs(ctx: ReconContext) -> tuple[list[str], list[str]]:
         elif port.version:
             nmap_versions.append(f"{port.service} {port.version}".strip())
 
-    return whatweb_techs, nmap_versions
+    return whatweb_techs, nmap_versions, whatweb_raws
 
 
 def _deduplicate_struct(terms: list[SearchTerm]) -> list[SearchTerm]:
@@ -301,90 +510,119 @@ def _parse_vulnx_json(raw: str, product: str) -> list[CveInfo]:
         cve_id = r.get("cve_id") or r.get("doc_id", "")
         if not cve_id:
             continue
+        poc_urls = [p.get("url", "") for p in r.get("pocs", []) if p.get("url")]
         findings.append(
             CveInfo(
                 cve_id=cve_id,
                 severity=r.get("severity", "unknown"),
                 cvss_score=float(r.get("cvss_score") or 0.0),
                 epss_score=float(r.get("epss_score") or 0.0),
-                description=r.get("description", "")[:200],
+                # Keep enough text for version-range extraction (the affected
+                # range is stated in the description); the report truncates again.
+                description=r.get("description", "")[:400],
                 product=product,
                 is_poc=bool(r.get("is_poc", False)),
                 is_kev=bool(r.get("is_kev", False)),
                 is_remote=bool(r.get("is_remote", False)),
                 has_nuclei_template=bool(r.get("is_template", False)),
+                remediation=(r.get("remediation") or "")[:300],
+                poc_urls=poc_urls[:5],
             )
         )
     return findings
 
 
-def _build_query(term: SearchTerm, *, with_version: bool = True) -> str:
-    """Build a vulnx search query string from a SearchTerm.
+def _build_query(term: SearchTerm) -> str:
+    """Build a vulnx search query (vendor/product only).
 
-    ``with_version=False`` drops the version constraint — nmap's exact version
-    rarely matches NVD's version field, so a version-less query is used as a
-    last resort to keep the vendor/product hit instead of returning nothing.
+    The version is deliberately NOT a query constraint: vulnx exposes no
+    structured version field to match against (the affected range lives only in
+    free-text description/remediation), so a versioned query matches nothing.
+    Version applicability is instead resolved client-side after the search via
+    :func:`_extract_range_verdict` / :func:`_ai_version_filter`.
     """
-    parts = [
-        f"affected_products.vendor:{term.vendor}",
-        f"affected_products.product:{term.product}",
-    ]
-    if with_version and term.version:
-        parts.append(f"affected_products.version:{term.version}")
-    return " && ".join(parts)
+    return (
+        f"affected_products.vendor:{term.vendor} && "
+        f"affected_products.product:{term.product}"
+    )
 
 
-def _base_cmd(query: str) -> list[str]:
+def _base_cmd(query: str, n: int = 40) -> list[str]:
     return [
         "vulnx", "search", query,
         "--json", "--silent", "--disable-update-check",
         "--severity", "critical,high,medium",
         "--sort-desc", "cvss_score",
-        "-n", "15",
+        "-n", str(n),
     ]
 
 
+# Result-set variants unioned per term: exploit-prioritised sets plus a broad
+# top-CVSS set, so the version-relevant CVE is not lost behind exploit filters.
+_SEARCH_VARIANTS: tuple[list[str], ...] = (
+    ["--kev", "--poc", "--remote-exploit"],
+    ["--poc", "--remote-exploit"],
+    ["--template"],
+    [],
+)
+
+
 async def _search_structured(term: SearchTerm) -> list[CveInfo]:
-    """Search by vendor/product using vulnx query syntax with tiered fallback."""
-    base_cmd = _base_cmd(_build_query(term))
+    """Search vendor/product, union the variant result sets, then filter by the
+    detected version (deterministic range parse + AI fallback on the residual).
 
-    # Tier 1: KEV + PoC + remote exploit (the gold)
-    result = await run(base_cmd + ["--kev", "--poc", "--remote-exploit"], timeout=30)
-    findings = _parse_vulnx_json(result.stdout, term.product)
+    Only confident "out" verdicts are dropped; "in" and "unknown" are kept.
+    """
+    query = _build_query(term)
+    cmds = [_base_cmd(query) + variant for variant in _SEARCH_VARIANTS]
+    results = await asyncio.gather(
+        *(run(cmd, timeout=30) for cmd in cmds), return_exceptions=True
+    )
 
-    # Tier 2: PoC + remote (no KEV requirement)
+    findings: dict[str, CveInfo] = {}
+    for res in results:
+        if isinstance(res, BaseException):
+            continue
+        for f in _parse_vulnx_json(res.stdout, term.product):
+            findings.setdefault(f.cve_id, f)
+
     if not findings:
-        result = await run(base_cmd + ["--poc", "--remote-exploit"], timeout=30)
-        findings = _parse_vulnx_json(result.stdout, term.product)
+        return []
 
-    # Tier 3: has Nuclei template (actionable for automated scanning)
-    if not findings:
-        result = await run(base_cmd + ["--template"], timeout=30)
-        findings = _parse_vulnx_json(result.stdout, term.product)
+    # Deterministic version verdict from description/remediation.
+    for cve_id, f in list(findings.items()):
+        verdict = _extract_range_verdict(term.version, f.description, f.remediation)
+        findings[cve_id] = f.model_copy(update={"version_verdict": verdict})
 
-    # Tier 4: broad search (no exploit filters, still version-pinned)
-    if not findings:
-        result = await run(base_cmd, timeout=30)
-        findings = _parse_vulnx_json(result.stdout, term.product)
+    # AI fallback only for the residual "unknown" (and only when we have a
+    # detected version to compare against).
+    if term.version:
+        residual = [
+            (f.cve_id, term.version, f.description, f.remediation)
+            for f in findings.values()
+            if f.version_verdict == "unknown"
+        ]
+        ai_verdicts = await _ai_version_filter(residual)
+        for cve_id, verdict in ai_verdicts.items():
+            if cve_id in findings:
+                findings[cve_id] = findings[cve_id].model_copy(
+                    update={"version_verdict": verdict}
+                )
 
-    # Tier 5: drop the version constraint (exact NVD version match is brittle)
-    if not findings and term.version:
-        result = await run(_base_cmd(_build_query(term, with_version=False)), timeout=30)
-        findings = _parse_vulnx_json(result.stdout, term.product)
-
-    if findings:
-        logger.debug("vulnx %s: %d CVE(s)", term, len(findings))
-    return findings
+    survivors = [f for f in findings.values() if f.version_verdict != "out"]
+    logger.debug(
+        "vulnx %s: %d CVE(s) kept (%d dropped out-of-range)",
+        term, len(survivors), len(findings) - len(survivors),
+    )
+    return survivors
 
 
 async def run_vulnx(ctx: ReconContext) -> None:
     """Run vulnx CVE search for all detected technologies."""
-    import asyncio
-
-    whatweb_techs, nmap_versions = _collect_raw_inputs(ctx)
+    whatweb_techs, nmap_versions, whatweb_raws = _collect_raw_inputs(ctx)
 
     # Try AI-based normalisation first
-    ai_terms = await _normalize_with_ai(whatweb_techs, nmap_versions)
+    ai_terms = await _normalize_with_ai(whatweb_techs, nmap_versions, whatweb_raws)
 
     if ai_terms is not None:
         print_info("vulnx: using AI-based technology normalisation")
@@ -420,14 +658,25 @@ async def run_vulnx(ctx: ReconContext) -> None:
                 seen_ids.add(f.cve_id)
                 all_findings.append(f)
 
-    all_findings.sort(key=lambda f: (not f.is_kev, -f.cvss_score))
+    # Rank: version-applicable first, then KEV, then exploit availability
+    # (PoC / Nuclei template), then real-world likelihood (EPSS), then CVSS.
+    _verdict_rank = {"in": 0, "unknown": 1}
+    all_findings.sort(key=lambda f: (
+        _verdict_rank.get(f.version_verdict, 2),
+        not f.is_kev,
+        not (f.is_poc or f.has_nuclei_template),
+        -f.epss_score,
+        -f.cvss_score,
+    ))
     ctx.vulnx = VulnxResult(findings=all_findings, searched_terms=searched_labels)
 
     crit_high = [f for f in all_findings if f.severity in ("critical", "high")]
     kev = [f for f in all_findings if f.is_kev]
     poc = [f for f in all_findings if f.is_poc]
+    in_range = [f for f in all_findings if f.version_verdict == "in"]
     print_finding(
         "vulnx",
         f"{len(all_findings)} CVE(s) — "
-        f"{len(crit_high)} critical/high, {len(kev)} KEV, {len(poc)} with PoC",
+        f"{len(in_range)} version-matched, {len(crit_high)} critical/high, "
+        f"{len(kev)} KEV, {len(poc)} with PoC",
     )
