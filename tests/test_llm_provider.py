@@ -48,6 +48,25 @@ def test_default_is_auto(monkeypatch):
     assert llm.active_provider() == "anthropic"
 
 
+def test_anthropic_model_defaults(monkeypatch):
+    monkeypatch.delenv("HTBRECON_ANTHROPIC_MODEL_SMALL", raising=False)
+    monkeypatch.delenv("HTBRECON_ANTHROPIC_MODEL_LARGE", raising=False)
+    assert llm._anthropic_model("small") == "claude-haiku-4-5-20251001"
+    assert llm._anthropic_model("large") == "claude-sonnet-4-20250514"
+
+
+def test_anthropic_model_env_override(monkeypatch):
+    monkeypatch.setenv("HTBRECON_ANTHROPIC_MODEL_SMALL", "claude-custom-small")
+    monkeypatch.setenv("HTBRECON_ANTHROPIC_MODEL_LARGE", "claude-custom-large")
+    assert llm._anthropic_model("small") == "claude-custom-small"
+    assert llm._anthropic_model("large") == "claude-custom-large"
+
+
+def test_anthropic_model_blank_falls_back(monkeypatch):
+    monkeypatch.setenv("HTBRECON_ANTHROPIC_MODEL_SMALL", "   ")
+    assert llm._anthropic_model("small") == "claude-haiku-4-5-20251001"
+
+
 def test_strip_think():
     assert llm._strip_think("<think>reasoning here</think>\n{\"a\":1}") == '{"a":1}'
     assert llm._strip_think("no think tags") == "no think tags"

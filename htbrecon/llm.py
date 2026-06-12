@@ -21,12 +21,24 @@ from htbrecon.console import logger
 
 _DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 
-# tier -> Anthropic model id. "small" = fast structured tasks (tech
+# tier -> default Anthropic model id. "small" = fast structured tasks (tech
 # normalisation, version filtering); "large" = the final attack-vector analysis.
+# Each tier's model can be overridden from the environment / .env.
 _ANTHROPIC_MODELS = {
     "small": "claude-haiku-4-5-20251001",
     "large": "claude-sonnet-4-20250514",
 }
+_ANTHROPIC_MODEL_ENV = {
+    "small": "HTBRECON_ANTHROPIC_MODEL_SMALL",
+    "large": "HTBRECON_ANTHROPIC_MODEL_LARGE",
+}
+
+
+def _anthropic_model(tier: str) -> str:
+    """Resolve the Anthropic model id for a tier, honouring an env override."""
+    default = _ANTHROPIC_MODELS.get(tier, _ANTHROPIC_MODELS["small"])
+    env_var = _ANTHROPIC_MODEL_ENV.get(tier, "")
+    return (os.environ.get(env_var, "").strip() if env_var else "") or default
 
 # Thinking-capable Ollama models (e.g. qwen3.5) may emit <think>…</think> blocks
 # before the real answer; strip them so JSON/Markdown consumers get clean text.
@@ -89,7 +101,7 @@ async def _complete_anthropic(
         logger.debug("anthropic package not installed")
         return None
 
-    model = _ANTHROPIC_MODELS.get(tier, _ANTHROPIC_MODELS["small"])
+    model = _anthropic_model(tier)
     try:
         client = anthropic.AsyncAnthropic(api_key=api_key)
         response = await client.messages.create(

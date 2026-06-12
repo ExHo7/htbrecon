@@ -244,6 +244,8 @@ normalisation / CVE version filtering).
 |----------|-------------|
 | `HTBRECON_LLM_PROVIDER` | `auto` (default), `anthropic`, or `ollama`. `auto` uses Anthropic when `ANTHROPIC_API_KEY` is set, otherwise Ollama. |
 | `ANTHROPIC_API_KEY` | Required when the provider resolves to `anthropic`. |
+| `HTBRECON_ANTHROPIC_MODEL_SMALL` | Override the Anthropic model for fast tasks (vulnx normalisation / version filtering). Default `claude-haiku-4-5-20251001`. |
+| `HTBRECON_ANTHROPIC_MODEL_LARGE` | Override the Anthropic model for the final analysis. Default `claude-sonnet-4-20250514`. |
 | `OLLAMA_HOST` | Ollama base URL. Default `http://localhost:11434`. |
 | `HTBRECON_OLLAMA_MODEL` | Model name when the provider resolves to `ollama` (no default — set it in `.env`). |
 
