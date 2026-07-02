@@ -207,10 +207,12 @@ Directory scanning not performed.
 {% if vulnx and vulnx.findings %}
 **Technologies searched:** {{ vulnx.searched_terms | join(", ") }}
 
-| Severity | CVE ID | CVSS | EPSS | Product | PoC | KEV | Nuclei | Description |
-|----------|--------|------|------|---------|-----|-----|--------|-------------|
+*Ver column: ✓ = detected version is affected, ? = undetermined (`out`-of-range CVEs are filtered out).*
+
+| Severity | CVE ID | CVSS | EPSS | Product | Ver | PoC | KEV | Nuclei | Description |
+|----------|--------|------|------|---------|-----|-----|-----|--------|-------------|
 {% for f in vulnx.findings %}
-| {{ f.severity | upper }} | {{ f.cve_id }} | {{ "%.1f" | format(f.cvss_score) }} | {{ "%.2f" | format(f.epss_score) }} | {{ f.product }} | {{ "✓" if f.is_poc else "–" }} | {{ "✓" if f.is_kev else "–" }} | {{ "✓" if f.has_nuclei_template else "–" }} | {{ f.description[:100] }}{% if f.description | length > 100 %}…{% endif %} |
+| {{ f.severity | upper }} | {{ f.cve_id }} | {{ "%.1f" | format(f.cvss_score) }} | {{ "%.2f" | format(f.epss_score) }} | {{ f.product }} | {{ "✓" if f.version_verdict == "in" else "?" }} | {% if f.poc_urls %}[link]({{ f.poc_urls[0] }}){% elif f.is_poc %}✓{% else %}–{% endif %} | {{ "✓" if f.is_kev else "–" }} | {{ "✓" if f.has_nuclei_template else "–" }} | {{ f.description[:100] }}{% if f.description | length > 100 %}…{% endif %} |
 {% endfor %}
 {% else %}
 No CVE intelligence gathered (no recognised technologies or vulnx unavailable).
@@ -514,10 +516,6 @@ Kerbrute not run (credentials provided or port 88 not detected).
 ## API Endpoints
 
 {% if api and (api.endpoints or api.graphql_endpoints or api.spec_urls) %}
-{% if api.api_tech_hints %}
-**Detected API tech:** {{ api.api_tech_hints | join(", ") }}
-{% endif %}
-
 {% if api.spec_urls %}
 ### API Specs (Swagger / OpenAPI)
 {% for s in api.spec_urls %}

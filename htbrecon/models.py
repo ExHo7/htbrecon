@@ -71,6 +71,13 @@ class CveInfo(BaseModel):
     is_kev: bool = False
     is_remote: bool = False
     has_nuclei_template: bool = False
+    remediation: str = ""
+    poc_urls: list[str] = []
+    # Version applicability verdict vs. the detected version, derived from the
+    # CVE description/remediation (vulnx exposes no structured version range):
+    # "in" (detected version is affected), "unknown" (couldn't determine).
+    # "out" findings are dropped before they reach the report.
+    version_verdict: str = "unknown"
 
 
 class VulnxResult(BaseModel):
@@ -211,7 +218,6 @@ class ApiResult(BaseModel):
     endpoints: list[str] = []          # "https://host/api/v1 [200]"
     graphql_endpoints: list[str] = []  # URLs with open introspection
     spec_urls: list[str] = []          # Swagger / OpenAPI spec URLs
-    api_tech_hints: list[str] = []     # e.g. ["flowise", "fastapi"]
 
 
 class ReconContext:

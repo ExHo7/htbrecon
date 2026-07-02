@@ -30,7 +30,7 @@
 - **Active Directory collection** with BloodHound/nxc (requires credentials) — admin users, SPNs, DCSync principals
 - **Password spray** — tests username=password combos with lockout-policy awareness
 - **WinRM access check** with nxc — verifies shell access on port 5985/5986 when credentials are available
-- **AI analysis** powered by Claude (Anthropic) — suggests attack vectors and next steps
+- **AI analysis** powered by Claude (Anthropic) **or a local LLM via Ollama** — suggests attack vectors and next steps
 - **Markdown report** generated at the end of every run
 - **Debug mode** — verbose command logging on demand
 
@@ -43,7 +43,7 @@
 - Tools available in Exegol: `nmap`, `ffuf`, `nuclei`, `whatweb`, `enum4linux-ng`, `nxc`, `ldapsearch`, `kerbrute`, `bloodhound-python`
 - EyeWitness at `/opt/tools/EyeWitness/Python/EyeWitness.py` (pre-installed in Exegol)
 - `vulnx` binary (installed via `htbrecon setup`, see below)
-- Anthropic API key (optional, for AI analysis)
+- An LLM provider for AI features (optional): an Anthropic API key **or** a local [Ollama](https://ollama.com) server
 
 ---
 
@@ -236,9 +236,40 @@ results/machinename/
 
 ## Environment Variables
 
+Read from the shell environment or a `.env` file at the project root (see
+`.env.example`). They configure the AI features (final analysis + vulnx tech
+normalisation / CVE version filtering).
+
 | Variable | Description |
 |----------|-------------|
-| `ANTHROPIC_API_KEY` | Required for AI analysis. Omit or use `--skip-ai` to disable. |
+| `HTBRECON_LLM_PROVIDER` | `auto` (default), `anthropic`, or `ollama`. `auto` uses Anthropic when `ANTHROPIC_API_KEY` is set, otherwise Ollama. |
+| `ANTHROPIC_API_KEY` | Required when the provider resolves to `anthropic`. |
+| `HTBRECON_ANTHROPIC_MODEL_SMALL` | Override the Anthropic model for fast tasks (vulnx normalisation / version filtering). Default `claude-haiku-4-5-20251001`. |
+| `HTBRECON_ANTHROPIC_MODEL_LARGE` | Override the Anthropic model for the final analysis. Default `claude-sonnet-4-20250514`. |
+| `OLLAMA_HOST` | Ollama base URL. Default `http://localhost:11434`. |
+| `HTBRECON_OLLAMA_MODEL` | Model name when the provider resolves to `ollama` (no default — set it in `.env`). |
+| `HTBRECON_OLLAMA_TIMEOUT` | Ollama request timeout in seconds. Default `600`. Raise if the analysis fails with `ReadTimeout`. |
+
+With no provider configured (or `--skip-ai`), AI features are skipped and the
+deterministic fallbacks are used.
+
+### Local LLM (Ollama)
+
+Run the AI features against a local model instead of the cloud:
+
+```bash
+ollama pull qwen2.5:7b          # or any model you prefer
+cp .env.example .env            # then edit:
+#   HTBRECON_LLM_PROVIDER=ollama
+#   HTBRECON_OLLAMA_MODEL=qwen2.5:7b
+```
+
+Notes:
+- JSON-producing calls (vulnx normalisation / version filtering) use Ollama's
+  `format=json` mode for reliable parsing.
+- For reasoning ("thinking") models, `<think>…</think>` output is stripped
+  automatically. Thinking consumes the generation budget — if the analysis
+  looks truncated, pick a non-thinking model or use a larger one.
 
 ---
 

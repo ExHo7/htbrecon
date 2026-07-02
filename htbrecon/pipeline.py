@@ -60,8 +60,6 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
     print_phase("Service Enumeration")
     phase3_tasks: list = []
 
-    if ctx.http_ports:
-        phase3_tasks.append(("WhatWeb", whatweb.run(ctx)))
     if ctx.has_smb:
         phase3_tasks.append(("SMB", smb.run(ctx)))
     if ctx.has_ldap:
@@ -169,11 +167,12 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
         ):
             await ffuf_subdomains.run(ctx)
 
-        # Run WhatWeb on newly discovered subdomains
-        if ctx.subdomains:
-            with console.status(
-                "[bold cyan]Running WhatWeb on subdomains...", spinner="dots"
-            ):
+        # Web enumeration: fingerprint main host + all discovered subdomains
+        with console.status(
+            "[bold cyan]Running WhatWeb (web enumeration)...", spinner="dots"
+        ):
+            await whatweb.run(ctx)
+            if ctx.subdomains:
                 await whatweb.run_subdomains(ctx)
 
         phase4_tasks = []

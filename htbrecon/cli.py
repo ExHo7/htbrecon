@@ -1,9 +1,32 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Optional
 
 import typer
+
+# Load .env (LLM provider, API keys, Ollama model/host) before anything reads
+# os.environ. Optional dependency — degrade gracefully if unavailable.
+try:
+    from dotenv import load_dotenv
+
+    # First the cwd and its parents (standard behaviour)...
+    load_dotenv()
+    # ...then fall back to the .env at the project root next to the installed
+    # package, so it is found even when htbrecon is run from another directory
+    # (e.g. an Exegol /workspace while the tool lives in /opt/tools/HTBRecon).
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+except ImportError:
+    # Don't fail hard, but make the cause visible — otherwise .env silently
+    # never loads and LLM env vars look "unset".
+    import sys
+
+    print(
+        "htbrecon: python-dotenv not installed — .env will not be loaded "
+        "(pip install python-dotenv, or reinstall: pip install -e .)",
+        file=sys.stderr,
+    )
 
 from htbrecon.config import build_config
 from htbrecon.console import console, print_banner, print_error

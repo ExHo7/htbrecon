@@ -5,6 +5,7 @@ from pathlib import Path
 
 from rich.console import Console
 from rich.logging import RichHandler
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 from rich.theme import Theme
@@ -62,34 +63,34 @@ _ASCII = r"""
 
 
 def print_banner(name: str, ip: str) -> None:
-    banner = f"[bold cyan]{_ASCII}[/]\n[dim]Target: {name}.htb ({ip})[/]"
+    banner = f"[bold cyan]{_ASCII}[/]\n[dim]Target: {escape(name)}.htb ({escape(ip)})[/]"
     console.print(Panel(banner, border_style="cyan", expand=False))
 
 
 def print_phase(title: str) -> None:
-    console.print(f"\n[phase]>>> {title}[/]")
+    console.print(f"\n[phase]>>> {escape(title)}[/]")
 
 
 def print_finding(severity: str, text: str) -> None:
     style = severity.lower() if severity.lower() in _theme.styles else "info"
-    console.print(f"  [{style}][{severity.upper()}][/] {text}")
+    console.print(f"  [{style}][{severity.upper()}][/] {escape(text)}")
 
 
 def print_error(text: str) -> None:
-    console.print(f"  [error][!] {text}[/]")
+    console.print(f"  [error][!] {escape(text)}[/]")
     logger.error(text)
 
 
 def print_success(text: str) -> None:
-    console.print(f"  [success][+] {text}[/]")
+    console.print(f"  [success][+] {escape(text)}[/]")
 
 
 def print_warning(text: str) -> None:
-    console.print(f"  [warning][*] {text}[/]")
+    console.print(f"  [warning][*] {escape(text)}[/]")
 
 
 def print_info(text: str) -> None:
-    console.print(f"  [info][-] {text}[/]")
+    console.print(f"  [info][-] {escape(text)}[/]")
 
 
 def print_ports_table(ports: list[PortInfo]) -> None:
