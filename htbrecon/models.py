@@ -218,7 +218,6 @@ class ApiResult(BaseModel):
     endpoints: list[str] = []          # "https://host/api/v1 [200]"
     graphql_endpoints: list[str] = []  # URLs with open introspection
     spec_urls: list[str] = []          # Swagger / OpenAPI spec URLs
-    api_tech_hints: list[str] = []     # e.g. ["flowise", "fastapi"]
 
 
 class ReconContext:

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 from pathlib import Path
 
 from htbrecon import executor
@@ -15,13 +14,6 @@ _API_WORDLIST_CANDIDATES = [
     "/usr/share/seclists/Discovery/Web-Content/raft-small-words-lowercase.txt",
 ]
 
-_API_KEYWORDS = re.compile(
-    r"(flowise|strapi|directus|hasura|graphql|fastapi|express|flask|django|"
-    r"laravel|rails|spring|nestjs|gin|fiber|actix|fastify|hapi|restify|"
-    r"swagger|openapi|apigee|kong|traefik)",
-    re.IGNORECASE,
-)
-
 _SPEC_PATTERNS = ("swagger", "openapi", "api-docs", "api-doc")
 _GRAPHQL_PATTERNS = ("graphql", "graphiql")
 
@@ -31,16 +23,6 @@ def _pick_wordlist() -> str | None:
         if Path(p).exists():
             return p
     return None
-
-
-def _detect_api_tech_from_whatweb(ctx: ReconContext) -> list[str]:
-    hints: list[str] = []
-    for ww in ctx.whatweb:
-        for tech in ww.technologies:
-            m = _API_KEYWORDS.search(tech)
-            if m:
-                hints.append(m.group(1).lower())
-    return list(set(hints))
 
 
 async def _ffuf_api(base_url: str, wordlist: str, out_file: str) -> list[tuple[str, int]]:
@@ -86,10 +68,6 @@ async def run(ctx: ReconContext) -> None:
         print_warning("No API wordlist found — skipping API scan")
         ctx.api = ApiResult()
         return
-
-    api_tech_hints = _detect_api_tech_from_whatweb(ctx)
-    if api_tech_hints:
-        print_info(f"API hints from WhatWeb: {', '.join(api_tech_hints)}")
 
     endpoints: list[str] = []
     graphql_endpoints: list[str] = []
@@ -142,7 +120,6 @@ async def run(ctx: ReconContext) -> None:
         endpoints=endpoints,
         graphql_endpoints=graphql_endpoints,
         spec_urls=spec_urls,
-        api_tech_hints=api_tech_hints,
     )
 
     total = len(endpoints) + len(graphql_endpoints) + len(spec_urls)

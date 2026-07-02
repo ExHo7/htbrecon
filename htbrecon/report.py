@@ -516,10 +516,6 @@ Kerbrute not run (credentials provided or port 88 not detected).
 ## API Endpoints
 
 {% if api and (api.endpoints or api.graphql_endpoints or api.spec_urls) %}
-{% if api.api_tech_hints %}
-**Detected API tech:** {{ api.api_tech_hints | join(", ") }}
-{% endif %}
-
 {% if api.spec_urls %}
 ### API Specs (Swagger / OpenAPI)
 {% for s in api.spec_urls %}
