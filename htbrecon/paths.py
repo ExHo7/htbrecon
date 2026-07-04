@@ -62,8 +62,8 @@ def resolve_wordlist(kind: str) -> Path | None:
 def wordlist_hint(kind: str) -> str:
     """Actionable message when a wordlist can't be resolved."""
     return (
-        f"Wordlist '{kind}' introuvable — installez seclists/dirb "
-        f"(sudo apt install seclists dirb) ou définissez "
-        f"HTBRECON_WORDLIST_{kind.upper()} (ou [wordlists].{kind} dans "
+        f"Wordlist '{kind}' not found — install seclists/dirb "
+        f"(sudo apt install seclists dirb) or set "
+        f"HTBRECON_WORDLIST_{kind.upper()} (or [wordlists].{kind} in "
         f"~/.config/htbrecon/config.toml)"
     )

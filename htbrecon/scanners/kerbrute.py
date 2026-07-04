@@ -19,7 +19,7 @@ async def run(ctx: ReconContext) -> None:
     wordlist = paths.resolve_wordlist("usernames")
     if wordlist is None:
         ctx.errors.append(paths.wordlist_hint("usernames"))
-        print_warning("Kerbrute: username wordlist introuvable — skip")
+        print_warning("Kerbrute: username wordlist not found — skipping")
         return
 
     print_info("Starting Kerbrute user enumeration...")

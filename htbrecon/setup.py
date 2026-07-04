@@ -161,7 +161,7 @@ def _run(cmd: list[str]) -> bool:
 def _install_pipx(package: str, force: bool) -> bool:
     if shutil.which("pipx") is None:
         print_error(
-            "pipx introuvable — installez-le puis réessayez: "
+            "pipx not found — install it first: "
             "sudo apt install pipx && pipx ensurepath"
         )
         return False
@@ -184,29 +184,29 @@ def _install_one(spec: ToolSpec, arch: str | None, dest_dir: Path, force: bool) 
     if method.kind == RELEASE:
         if arch is None:
             print_error(
-                f"{spec.name}: architecture non supportée "
-                f"({platform.system()} {platform.machine()}) — installez manuellement."
+                f"{spec.name}: unsupported architecture "
+                f"({platform.system()} {platform.machine()}) — install manually."
             )
             return False
         try:
             binary = method.binary or spec.check
             version, dest = install_release_binary(method.repo, arch, dest_dir, binary)
-            print_success(f"{spec.name} {version} installé -> {dest}")
+            print_success(f"{spec.name} {version} installed -> {dest}")
             return True
         except Exception as exc:  # noqa: BLE001 — surface any download/extract failure
-            print_error(f"{spec.name}: échec de l'installation ({exc})")
+            print_error(f"{spec.name}: installation failed ({exc})")
             return False
     if method.kind == PIPX:
         ok = _install_pipx(method.package, force)
         if ok:
-            print_success(f"{spec.name} installé via pipx ({method.package})")
+            print_success(f"{spec.name} installed via pipx ({method.package})")
         return ok
     if method.kind == APT:
         ok = _install_apt(method.package)
         if ok:
-            print_success(f"{spec.name} installé via apt ({method.package})")
+            print_success(f"{spec.name} installed via apt ({method.package})")
         return ok
-    print_error(f"{spec.name}: méthode d'installation inconnue '{method.kind}'")
+    print_error(f"{spec.name}: unknown install method '{method.kind}'")
     return False
 
 
@@ -220,8 +220,8 @@ def _warn_path(dest_dir: Path) -> None:
     path_entries = os.environ.get("PATH", "").split(os.pathsep)
     if str(dest_dir) not in path_entries:
         print_warning(
-            f"{dest_dir} n'est pas dans votre PATH — ajoutez "
-            f'\'export PATH="{dest_dir}:$PATH"\' à votre shell rc.'
+            f"{dest_dir} is not in your PATH — add "
+            f'\'export PATH="{dest_dir}:$PATH"\' to your shell rc.'
         )
 
 
@@ -230,10 +230,10 @@ def run_doctor() -> int:
     from htbrecon import paths
     from rich.table import Table
 
-    table = Table(title="HTBRecon — Diagnostic des dépendances", border_style="cyan")
-    table.add_column("Outil", style="bold")
-    table.add_column("Statut")
-    table.add_column("Chemin / méthode d'install", style="dim")
+    table = Table(title="HTBRecon — Dependency check", border_style="cyan")
+    table.add_column("Tool", style="bold")
+    table.add_column("Status")
+    table.add_column("Path / install method", style="dim")
 
     missing_required = 0
     for spec in tools.all_specs():
@@ -241,7 +241,7 @@ def run_doctor() -> int:
         if found:
             table.add_row(spec.name, "[green]ok[/]", where or "")
         else:
-            tag = "[red]MANQUANT[/]" if spec.required else "[yellow]absent (optionnel)[/]"
+            tag = "[red]MISSING[/]" if spec.required else "[yellow]missing (optional)[/]"
             table.add_row(spec.name, tag, spec.install.describe())
             if spec.required:
                 missing_required += 1
@@ -249,23 +249,23 @@ def run_doctor() -> int:
 
     # Wordlists (resolved, not installed).
     wl_table = Table(title="Wordlists", border_style="cyan")
-    wl_table.add_column("Type", style="bold")
-    wl_table.add_column("Statut")
-    wl_table.add_column("Chemin", style="dim")
+    wl_table.add_column("Kind", style="bold")
+    wl_table.add_column("Status")
+    wl_table.add_column("Path", style="dim")
     for kind in ("subdomains", "directories", "usernames", "api"):
         resolved = paths.resolve_wordlist(kind)
         if resolved:
             wl_table.add_row(kind, "[green]ok[/]", str(resolved))
         else:
-            wl_table.add_row(kind, "[yellow]absente[/]", "apt install seclists dirb")
+            wl_table.add_row(kind, "[yellow]missing[/]", "apt install seclists dirb")
     console.print(wl_table)
 
     arch = detect_arch()
-    console.print(f"\n[dim]Architecture: {arch or 'non supportée'} — install user: {_USER_BIN}[/]")
+    console.print(f"\n[dim]Architecture: {arch or 'unsupported'} — user install dir: {_USER_BIN}[/]")
     if missing_required:
-        print_warning(f"{missing_required} outil(s) requis manquant(s) — lancez [bold]htbrecon setup[/]")
+        print_warning(f"{missing_required} required tool(s) missing — run [bold]htbrecon setup[/]")
     else:
-        print_success("Tous les outils requis sont disponibles")
+        print_success("All required tools available")
     _warn_path(_USER_BIN)
     return 1 if missing_required else 0
 
@@ -282,13 +282,13 @@ def run_setup(only: list[str] | None = None, force: bool = False, system: bool =
         specs = [s for s in specs if s.name.lower() in wanted or s.check.lower() in wanted]
         unknown = wanted - {s.name.lower() for s in specs} - {s.check.lower() for s in specs}
         for u in sorted(unknown):
-            print_warning(f"Outil inconnu ignoré: {u}")
+            print_warning(f"Unknown tool skipped: {u}")
 
     installed = skipped = failed = 0
     for spec in specs:
         found, where = tools.status(spec.name)
         if found and not force:
-            print_info(f"{spec.name} déjà présent ({where}) — --force pour réinstaller")
+            print_info(f"{spec.name} already present ({where}) — use --force to reinstall")
             skipped += 1
             continue
         if _install_one(spec, arch, dest_dir, force):
@@ -297,6 +297,6 @@ def run_setup(only: list[str] | None = None, force: bool = False, system: bool =
             failed += 1
 
     console.print()
-    print_success(f"Terminé — {installed} installé(s), {skipped} déjà présent(s), {failed} échec(s)")
+    print_success(f"Done — {installed} installed, {skipped} already present, {failed} failed")
     if installed:
         _warn_path(dest_dir)
