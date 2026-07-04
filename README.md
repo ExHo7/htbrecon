@@ -8,7 +8,7 @@
 /_/ /_/ /_/ /_____/_/ |_|\___/\___/\____/_/ /_/
 ```
 
-> Automated reconnaissance pipeline for Hack The Box machines, built to run inside [Exegol](https://github.com/ThePorgs/Exegol) containers or Kali Linux.
+> Automated reconnaissance pipeline for Hack The Box machines. Runs on any Debian-family Linux (Debian, Ubuntu, Kali, Parrot) as well as inside [Exegol](https://github.com/ThePorgs/Exegol) containers.
 
 ---
 
@@ -38,38 +38,48 @@
 
 ## Requirements
 
-- Python 3.10+
-- [Exegol](https://github.com/ThePorgs/Exegol) container or Kali Linux environment
-- Tools available in Exegol: `nmap`, `ffuf`, `nuclei`, `whatweb`, `enum4linux-ng`, `nxc`, `ldapsearch`, `kerbrute`, `bloodhound-python`
-- EyeWitness at `/opt/tools/EyeWitness/Python/EyeWitness.py` (pre-installed in Exegol)
-- `vulnx` binary (installed via `htbrecon setup`, see below)
+- Python 3.10+ on a Debian-family Linux (`amd64` or `arm64`)
+- External pentest tools — resolved from `PATH` (see the tool list below). HTBRecon installs the ones you're missing with `htbrecon setup`; on Exegol/Kali most are already present.
 - An LLM provider for AI features (optional): an Anthropic API key **or** a local [Ollama](https://ollama.com) server
+
+The external tools HTBRecon shells out to: `nmap`, `rustscan`, `ffuf`, `nuclei`,
+`katana`, `vulnx`, `whatweb`, `eyewitness`, `curl`, `nxc` (netexec),
+`ldapsearch`, `smbclient`, `enum4linux-ng`, `kerbrute`, `bloodhound-python`.
+Wordlists (SecLists / dirb) are read from their standard `/usr/share` locations
+or from a path you configure — they are never downloaded or bundled.
 
 ---
 
 ## Installation
 
-Inside your Exegol container:
-
 ```bash
-git clone https://github.com/ExHo7/HTBRecon.git /opt/tools/HTBRecon
-cd /opt/tools/HTBRecon
+git clone https://github.com/ExHo7/HTBRecon.git
+cd HTBRecon
 pip install -e .
-cd /workspace
 ```
 
-Then install the `vulnx` dependency:
+Check what's available on your host, then install what's missing:
 
 ```bash
-htbrecon setup
+htbrecon doctor          # diagnose tools + wordlists
+htbrecon setup           # install the missing tools for your architecture
 ```
 
-This downloads the latest `vulnx` binary from GitHub releases and installs it to `/usr/local/bin/vulnx`.
-Use `--force` to reinstall an existing version:
+`setup` installs to `~/.local/bin` by default (no root). Release-based tools
+(ffuf, nuclei, katana, vulnx, kerbrute, rustscan) download the correct binary
+for your CPU; Python tools use `pipx`; a few (nmap, ldap-utils, smbclient,
+whatweb) come from `apt` and need sudo.
 
 ```bash
-htbrecon setup --force
+htbrecon setup --only ffuf,nuclei,vulnx   # install specific tools
+htbrecon setup --force                     # reinstall existing
+htbrecon setup --system                    # install to /usr/local/bin (needs root)
 ```
+
+**Overriding tool paths / wordlists.** Auto-resolution goes env override → `PATH`
+→ known fallback locations. To force a specific binary or wordlist, set
+`HTBRECON_TOOL_<NAME>` / `HTBRECON_WORDLIST_<KIND>` (see `.env.example`) or add a
+`~/.config/htbrecon/config.toml` with `[tools]` / `[wordlists]` sections.
 
 ---
 
@@ -276,5 +286,5 @@ Notes:
 ## Notes
 
 - Designed for **Hack The Box** and similar CTF/lab environments. Use responsibly and only against machines you own or have explicit permission to test.
-- `/etc/hosts` is modified directly — requires write access (standard inside Exegol containers).
+- `/etc/hosts` is updated to map the target hostname. This needs write access (run with sudo, or as root inside a container). Without it, HTBRecon prints the exact line to add and continues.
 - IP address format is validated at startup — an invalid IP will produce a clear error before any scan begins.

@@ -235,16 +235,19 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
     print_success(f"Report saved to: {report_path}")
 
     if ctx.config.html:
+        import webbrowser
+
         from htbrecon.report import generate_html
-        import subprocess
+
         html_path = generate_html(ctx)
         print_success(f"HTML report: {html_path}")
-        subprocess.Popen(
-            ["firefox", str(html_path)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        print_success("Opening report in Firefox...")
+        try:
+            if webbrowser.open(html_path.resolve().as_uri()):
+                print_success("Opening report in your browser...")
+            else:
+                print_warning(f"No browser available — open manually: {html_path}")
+        except webbrowser.Error:
+            print_warning(f"No browser available — open manually: {html_path}")
 
     # Final summary
     console.print()

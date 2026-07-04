@@ -56,7 +56,7 @@ def add_host(ip: str, hostname: str) -> bool:
     try:
         status, message = check_host(ip, hostname)
     except PermissionError:
-        print_error("Cannot read /etc/hosts — run with appropriate permissions")
+        print_error(f"Cannot read {HOSTS_FILE} — add manually: {ip}\t{hostname}")
         return False
 
     if status == "exact_match":
@@ -106,6 +106,7 @@ def add_host(ip: str, hostname: str) -> bool:
 
     except PermissionError:
         print_error(
-            "Cannot write to /etc/hosts — run with sudo or appropriate permissions"
+            f"Cannot write to {HOSTS_FILE} (needs root). Add this line manually "
+            f"or re-run with sudo:  {ip}\t{hostname}"
         )
         return False

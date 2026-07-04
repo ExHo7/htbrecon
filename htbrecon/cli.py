@@ -81,12 +81,24 @@ def run(
 
 @app.command()
 def setup(
+    only: Optional[str] = typer.Option(
+        None, "--only", help="Comma-separated tool names to install (e.g. ffuf,nuclei,vulnx)"
+    ),
     force: bool = typer.Option(False, "--force", help="Reinstall even if already present"),
+    system: bool = typer.Option(
+        False, "--system", help="Install to /usr/local/bin (needs root) instead of ~/.local/bin"
+    ),
 ) -> None:
-    """Install vulnx binary (CVE intelligence) into /usr/local/bin."""
-    from htbrecon.setup import run_setup, run_setup_force
+    """Install the external pentest tools HTBRecon needs (per architecture)."""
+    from htbrecon.setup import run_setup
 
-    if force:
-        run_setup_force()
-    else:
-        run_setup()
+    tool_list = [t for t in only.split(",") if t.strip()] if only else None
+    run_setup(only=tool_list, force=force, system=system)
+
+
+@app.command()
+def doctor() -> None:
+    """Diagnose which external tools and wordlists are available on this host."""
+    from htbrecon.setup import run_doctor
+
+    raise typer.Exit(run_doctor())

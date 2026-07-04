@@ -3,7 +3,9 @@ from __future__ import annotations
 import ipaddress
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from htbrecon import paths
 
 
 class PortInfo(BaseModel):
@@ -341,11 +343,13 @@ class ReconConfig(BaseModel):
     debug: bool = False
     html: bool = False
     project_dir: Path = Path(".")
-    subdomain_wordlist: Path = Path(
-        "/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
+    # Resolved dynamically (env/config override > known distro paths > None).
+    # None means "not found" — the web scanners skip with an actionable hint.
+    subdomain_wordlist: Path | None = Field(
+        default_factory=lambda: paths.resolve_wordlist("subdomains")
     )
-    directory_wordlist: Path = Path(
-        "/usr/share/dirb/wordlists/common.txt"
+    directory_wordlist: Path | None = Field(
+        default_factory=lambda: paths.resolve_wordlist("directories")
     )
 
     @field_validator("ip")

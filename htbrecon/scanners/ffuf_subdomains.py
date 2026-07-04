@@ -55,8 +55,9 @@ async def run(ctx: ReconContext) -> None:
             target_url = url
 
     wordlist = config.subdomain_wordlist
-    if not wordlist.exists():
-        ctx.errors.append(f"Subdomain wordlist not found: {wordlist}")
+    if wordlist is None or not wordlist.exists():
+        from htbrecon import paths
+        ctx.errors.append(paths.wordlist_hint("subdomains"))
         return
 
     baseline_size = await _get_baseline_size(target_url, config.hostname)

@@ -133,7 +133,7 @@ async def run(ctx: ReconContext) -> None:
         ]
         result = await executor.run(nmap_cmd, timeout=600)
         if result.returncode == 127:
-            ctx.errors.append("nmap not found — install nmap or rustscan, or run inside Exegol")
+            ctx.errors.append("nmap not found — install nmap or rustscan (htbrecon setup)")
             return
 
     if result.timed_out:

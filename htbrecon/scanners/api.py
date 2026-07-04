@@ -4,25 +4,17 @@ import asyncio
 import json
 from pathlib import Path
 
-from htbrecon import executor
+from htbrecon import executor, paths
 from htbrecon.console import print_finding, print_info, print_success, print_warning
 from htbrecon.models import ApiResult, ReconContext
-
-_API_WORDLIST_CANDIDATES = [
-    "/usr/share/seclists/Discovery/Web-Content/api/api-endpoints.txt",
-    "/usr/share/seclists/Discovery/Web-Content/api/objects.txt",
-    "/usr/share/seclists/Discovery/Web-Content/raft-small-words-lowercase.txt",
-]
 
 _SPEC_PATTERNS = ("swagger", "openapi", "api-docs", "api-doc")
 _GRAPHQL_PATTERNS = ("graphql", "graphiql")
 
 
 def _pick_wordlist() -> str | None:
-    for p in _API_WORDLIST_CANDIDATES:
-        if Path(p).exists():
-            return p
-    return None
+    wl = paths.resolve_wordlist("api")
+    return str(wl) if wl else None
 
 
 async def _ffuf_api(base_url: str, wordlist: str, out_file: str) -> list[tuple[str, int]]:

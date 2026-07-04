@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import re
 
-from htbrecon import executor
+from htbrecon import executor, paths
 from htbrecon.console import print_finding, print_info, print_success, print_warning
 from htbrecon.models import KerbruteResult, ReconContext
 
-_WORDLIST = "/usr/share/seclists/Usernames/top-usernames-shortlist.txt"
 _VALID_RE = re.compile(r"\[\+\] VALID USERNAME:\s+(\S+?)@", re.IGNORECASE)
 _TESTED_RE = re.compile(r"Tested (\d+) usernames", re.IGNORECASE)
 
@@ -17,6 +16,12 @@ async def run(ctx: ReconContext) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     log_file = out_dir / "kerbrute.txt"
 
+    wordlist = paths.resolve_wordlist("usernames")
+    if wordlist is None:
+        ctx.errors.append(paths.wordlist_hint("usernames"))
+        print_warning("Kerbrute: username wordlist introuvable — skip")
+        return
+
     print_info("Starting Kerbrute user enumeration...")
 
     cmd = [
@@ -26,7 +31,7 @@ async def run(ctx: ReconContext) -> None:
         "-d", config.hostname,
         "-o", str(log_file),
         "--safe",
-        _WORDLIST,
+        str(wordlist),
     ]
 
     result = await executor.run(cmd, timeout=120, output_file=out_dir / "kerbrute_stdout.txt")

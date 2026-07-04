@@ -33,10 +33,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
-      - name: Install pip-audit
-        run: pip install pip-audit
+      - name: Install project + pip-audit
+        run: pip install -e . pip-audit
       - name: Run pip-audit
-        run: pip-audit -r requirements.txt --skip-editable || true
+        run: pip-audit --skip-editable || true
 
   mypy:
     runs-on: ubuntu-latest
@@ -53,3 +53,17 @@ jobs:
     - name: Run mypy
       run: |
         mypy htbrecon/ --ignore-missing-imports --exclude htbrecon/__main__
+
+  tests:
+    runs-on: ubuntu-latest
+    name: Unit tests with pytest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+    - name: Install Dependencies
+      run: pip install -e . pytest
+    - name: Run pytest
+      run: pytest -q

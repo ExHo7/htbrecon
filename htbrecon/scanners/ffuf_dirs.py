@@ -60,8 +60,9 @@ async def run(ctx: ReconContext) -> None:
         return
 
     wordlist = config.directory_wordlist
-    if not wordlist.exists():
-        ctx.errors.append(f"Directory wordlist not found: {wordlist}")
+    if wordlist is None or not wordlist.exists():
+        from htbrecon import paths
+        ctx.errors.append(paths.wordlist_hint("directories"))
         return
 
     # Build URL for each hostname x each HTTP port

@@ -30,8 +30,7 @@ async def run(ctx: ReconContext) -> None:
     print_info(f"EyeWitness: screenshotting {len(urls)} URL(s)...")
 
     cmd = [
-        "/opt/tools/EyeWitness/venv/bin/python3",
-        "/opt/tools/EyeWitness/Python/EyeWitness.py",
+        "eyewitness",
         "--web",
         "-f", str(urls_file),
         "-d", str(screenshots_dir),

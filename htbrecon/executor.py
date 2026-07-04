@@ -6,23 +6,22 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from htbrecon import tools
 from htbrecon.console import logger
-
-# Exegol aliases that can't be resolved via bash -lc (broken alias file).
-# Maps command name → actual executable args.
-EXEGOL_ALIASES: dict[str, list[str]] = {
-    "whatweb": [
-        "/usr/local/rvm/gems/ruby-3.2.2@whatweb/wrappers/ruby",
-        "/opt/tools/WhatWeb/whatweb",
-    ],
-    "eyewitness": ["python3", "/opt/tools/EyeWitness/Python/EyeWitness.py"],
-}
 
 
 def _resolve_cmd(cmd: list[str]) -> list[str]:
-    """Replace aliased command names with their real paths."""
-    if cmd and cmd[0] in EXEGOL_ALIASES:
-        return EXEGOL_ALIASES[cmd[0]] + cmd[1:]
+    """Resolve a command's first token to a concrete path/argv via the tool registry.
+
+    Uses :func:`htbrecon.tools.resolve` (env override > PATH > known fallbacks).
+    If the tool is unknown or unresolved, the command is left unchanged so the
+    scanner's existing return-code-127 handling still fires.
+    """
+    if not cmd:
+        return cmd
+    resolved = tools.resolve(cmd[0])
+    if resolved is not None:
+        return resolved + cmd[1:]
     return cmd
 
 
