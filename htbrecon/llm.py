@@ -26,7 +26,7 @@ _DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 # Each tier's model can be overridden from the environment / .env.
 _ANTHROPIC_MODELS = {
     "small": "claude-haiku-4-5",
-    "large": "claude-sonnet-5",
+    "large": "claude-sonnet-4-6",
 }
 _ANTHROPIC_MODEL_ENV = {
     "small": "HTBRECON_ANTHROPIC_MODEL_SMALL",
@@ -140,16 +140,11 @@ async def _complete_ollama(
             {"role": "user", "content": user},
         ],
         "stream": False,
-        # Reasoning models otherwise spend the whole token budget on a <think>
-        # block and never emit the answer; disable it so output is the answer.
         "think": False,
         "options": {"temperature": 0, "num_predict": max_tokens},
     }
     if json_mode:
         payload["format"] = "json"
-
-    # Local generation is slow — a large-tier analysis on a 7-9B model can take
-    # minutes. Generous default, overridable via HTBRECON_OLLAMA_TIMEOUT (seconds).
     try:
         timeout = float(os.environ.get("HTBRECON_OLLAMA_TIMEOUT", "600"))
     except ValueError:
@@ -171,6 +166,5 @@ async def _complete_ollama(
         content = (data.get("message") or {}).get("content", "")
         return _strip_think(content) if content else None
     except Exception as exc:
-        # Some failures (e.g. ReadTimeout) stringify to "" — log the type too.
         logger.debug("ollama completion failed: %s: %s", type(exc).__name__, exc)
         return None

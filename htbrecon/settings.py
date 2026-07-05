@@ -28,9 +28,8 @@ def _load_config() -> dict:
     if not CONFIG_PATH.exists():
         return {}
     try:
-        import tomllib  # stdlib, Python >= 3.11
+        import tomllib
     except ModuleNotFoundError:
-        # Python 3.10 has no tomllib — env vars still work, file is ignored.
         return {}
     try:
         with CONFIG_PATH.open("rb") as fh:

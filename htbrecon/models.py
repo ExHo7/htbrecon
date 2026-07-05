@@ -75,10 +75,6 @@ class CveInfo(BaseModel):
     has_nuclei_template: bool = False
     remediation: str = ""
     poc_urls: list[str] = []
-    # Version applicability verdict vs. the detected version, derived from the
-    # CVE description/remediation (vulnx exposes no structured version range):
-    # "in" (detected version is affected), "unknown" (couldn't determine).
-    # "out" findings are dropped before they reach the report.
     version_verdict: str = "unknown"
 
 
@@ -92,9 +88,9 @@ class VulnxResult(BaseModel):
 class SprayResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    lockout_threshold: int = 0  # 0 = no lockout policy
+    lockout_threshold: int = 0  
     users_tested: int = 0
-    valid_creds: list[str] = []  # "user:password" format
+    valid_creds: list[str] = []  
     raw_output: str = ""
 
 
@@ -343,8 +339,6 @@ class ReconConfig(BaseModel):
     debug: bool = False
     html: bool = False
     project_dir: Path = Path(".")
-    # Resolved dynamically (env/config override > known distro paths > None).
-    # None means "not found" — the web scanners skip with an actionable hint.
     subdomain_wordlist: Path | None = Field(
         default_factory=lambda: paths.resolve_wordlist("subdomains")
     )

@@ -41,8 +41,6 @@ def _parse_nmap_xml(xml_path: Path) -> list[PortInfo]:
             product = svc.get("product", "")
             ver = svc.get("version", "")
             cpes = [c.text for c in svc.findall("cpe") if c.text]
-            # Build a display string compatible with the text parser's `version`
-            # field (consumers like is_ssl scan it for "ssl"/"tls").
             display = " ".join(p for p in (product, ver) if p)
             extra = svc.get("extrainfo", "")
             if extra:
@@ -72,8 +70,6 @@ def _parse_nmap_output(output: str) -> list[PortInfo]:
         version = m.group(5).strip()
         embedded = PORT_EMBEDDED_RE.match(version)
         if embedded:
-            # Two port entries concatenated on one line: the first port's own
-            # version is unknown, the embedded match carries the second port.
             ports.append(PortInfo(
                 port=int(m.group(1)),
                 protocol=m.group(2),
@@ -115,7 +111,7 @@ async def run(ctx: ReconContext) -> None:
         "--range", "1-65535",
         "--ulimit", "5000",
         "--",
-        "-Pn", "-sV",
+        "-Pn", "-sCV",
         "-oN", str(nmap_file),
         "-oX", str(xml_file),
     ]
@@ -126,7 +122,7 @@ async def run(ctx: ReconContext) -> None:
         print_info("rustscan not found — falling back to nmap")
         nmap_cmd = [
             "nmap",
-            "-F", "-sV", "-Pn",
+            "-sC", "-sV", "-Pn",
             "-oN", str(nmap_file),
             "-oX", str(xml_file),
             config.ip,
