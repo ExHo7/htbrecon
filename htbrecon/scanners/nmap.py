@@ -111,7 +111,7 @@ async def run(ctx: ReconContext) -> None:
         "--range", "1-65535",
         "--ulimit", "5000",
         "--",
-        "-Pn", "-sCV",
+        "-Pn", "-sV",
         "-oN", str(nmap_file),
         "-oX", str(xml_file),
     ]
@@ -122,7 +122,7 @@ async def run(ctx: ReconContext) -> None:
         print_info("rustscan not found — falling back to nmap")
         nmap_cmd = [
             "nmap",
-            "-sC", "-sV", "-Pn",
+            "-F", "-sV", "-Pn",
             "-oN", str(nmap_file),
             "-oX", str(xml_file),
             config.ip,
