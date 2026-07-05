@@ -16,12 +16,14 @@ _HTML_WRAPPER = """\
 <title>HTBRecon — {title}</title>
 <style>
   :root {{
-    --bg: #1e1e2e;
+    --bg: #11111b;
     --bg2: #181825;
+    --card: #1e1e2e;
     --surface: #313244;
     --surface2: #45475a;
     --text: #cdd6f4;
     --subtext: #a6adc8;
+    --muted: #6c7086;
     --critical: #f38ba8;
     --high: #fab387;
     --medium: #f9e2af;
@@ -29,104 +31,330 @@ _HTML_WRAPPER = """\
     --info: #a6e3a1;
     --accent: #cba6f7;
     --green: #a6e3a1;
+    --red: #f38ba8;
     --teal: #94e2d5;
+    --sidebar-w: 270px;
+    --shadow: 0 4px 18px rgba(0,0,0,0.35);
   }}
   * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  html {{ scroll-behavior: smooth; }}
   body {{
-    background: var(--bg);
+    background: radial-gradient(1200px 600px at 80% -5%, #1b1b2e 0%, var(--bg) 55%) fixed;
     color: var(--text);
-    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
     font-size: 15px;
     line-height: 1.6;
-    padding: 2rem;
-    max-width: 1400px;
-    margin: 0 auto;
   }}
-  h1 {{ color: var(--accent); font-size: 2rem; margin: 1.5rem 0 0.5rem; border-bottom: 2px solid var(--surface); padding-bottom: 0.4rem; }}
-  h2 {{ color: var(--teal); font-size: 1.4rem; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid var(--surface); padding-bottom: 0.3rem; }}
-  h3 {{ color: var(--low); font-size: 1.1rem; margin: 1.2rem 0 0.4rem; }}
+  /* ---------- Layout ---------- */
+  .layout {{ display: flex; align-items: flex-start; }}
+  .sidebar {{
+    position: sticky; top: 0; height: 100vh;
+    width: var(--sidebar-w); flex: 0 0 var(--sidebar-w);
+    background: var(--bg2); border-right: 1px solid var(--surface);
+    padding: 1.2rem 0.8rem; overflow-y: auto;
+  }}
+  .sidebar .brand {{
+    font-weight: 700; font-size: 1.1rem; color: var(--accent);
+    padding: 0 0.6rem 0.8rem; letter-spacing: 0.02em;
+  }}
+  .sidebar .brand small {{ display:block; color: var(--muted); font-weight: 400; font-size: 0.72rem; }}
+  #toc-search {{
+    width: calc(100% - 0.4rem); margin: 0 0.2rem 0.7rem; padding: 0.45rem 0.6rem;
+    background: var(--card); border: 1px solid var(--surface); border-radius: 8px;
+    color: var(--text); font-size: 0.85rem; outline: none;
+  }}
+  #toc-search:focus {{ border-color: var(--accent); }}
+  .toc a {{
+    display: flex; align-items: center; justify-content: space-between; gap: 0.4rem;
+    padding: 0.4rem 0.6rem; border-radius: 8px; color: var(--subtext);
+    font-size: 0.86rem; text-decoration: none; border-left: 3px solid transparent;
+  }}
+  .toc a:hover {{ background: var(--surface); color: var(--text); }}
+  .toc a.active {{ background: var(--surface); color: var(--text); border-left-color: var(--accent); }}
+  .toc a.empty {{ color: var(--muted); opacity: 0.55; }}
+  .toc a .count {{
+    font-size: 0.7rem; background: var(--surface); color: var(--subtext);
+    padding: 0.05rem 0.4rem; border-radius: 999px; min-width: 1.4rem; text-align: center;
+  }}
+  .toc a.hit .count {{ background: var(--critical); color: var(--bg); font-weight: 700; }}
+  .toc-toggle {{
+    margin: 0.6rem 0.2rem 0; display: flex; align-items: center; gap: 0.4rem;
+    font-size: 0.78rem; color: var(--subtext); cursor: pointer; user-select: none;
+  }}
+  .content {{ flex: 1 1 auto; min-width: 0; padding: 2rem 2.4rem 5rem; max-width: 1200px; margin: 0 auto; }}
+  /* ---------- Header / hero ---------- */
+  .hero {{
+    background: linear-gradient(135deg, var(--card), var(--bg2));
+    border: 1px solid var(--surface); border-radius: 16px;
+    padding: 1.6rem 1.8rem; margin-bottom: 1.4rem; box-shadow: var(--shadow);
+  }}
+  .hero h1 {{ color: var(--text); font-size: 1.9rem; border: none; padding: 0; margin: 0; }}
+  .hero .meta {{ color: var(--subtext); font-size: 0.9rem; margin-top: 0.4rem; display:flex; gap:1.2rem; flex-wrap:wrap; }}
+  .hero .meta b {{ color: var(--text); }}
+  /* ---------- Dashboard stat cards ---------- */
+  .stats {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.8rem; margin-bottom: 1.2rem; }}
+  .stat {{
+    background: var(--card); border: 1px solid var(--surface); border-radius: 14px;
+    padding: 0.9rem 1rem; position: relative; overflow: hidden;
+  }}
+  .stat .num {{ font-size: 1.8rem; font-weight: 800; line-height: 1; }}
+  .stat .lbl {{ color: var(--subtext); font-size: 0.78rem; margin-top: 0.3rem; text-transform: uppercase; letter-spacing: 0.04em; }}
+  .stat.crit .num {{ color: var(--critical); }}
+  .stat.high .num {{ color: var(--high); }}
+  .stat.good .num {{ color: var(--green); }}
+  .stat.neutral .num {{ color: var(--low); }}
+  /* ---------- Alert banner ---------- */
+  .alerts {{ margin-bottom: 1.4rem; display: flex; flex-direction: column; gap: 0.5rem; }}
+  .alert {{
+    display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem;
+    border-radius: 12px; font-size: 0.9rem; border: 1px solid;
+  }}
+  .alert.win {{ background: rgba(166,227,161,0.10); border-color: var(--green); color: var(--green); }}
+  .alert.vuln {{ background: rgba(243,139,168,0.10); border-color: var(--critical); color: var(--critical); }}
+  .alert b {{ color: var(--text); }}
+  .alert .tag {{ font-weight: 800; letter-spacing: 0.03em; }}
+  /* ---------- Section cards ---------- */
+  .section {{
+    background: var(--card); border: 1px solid var(--surface); border-left: 3px solid var(--surface2);
+    border-radius: 14px; padding: 0.2rem 1.4rem 1rem; margin-bottom: 1.1rem; box-shadow: var(--shadow);
+    scroll-margin-top: 1rem;
+  }}
+  .section.has-hit {{ border-left-color: var(--critical); }}
+  .section.is-empty {{ opacity: 0.6; }}
+  .section > h2 {{
+    display: flex; align-items: center; gap: 0.6rem; cursor: pointer; user-select: none;
+    color: var(--teal); font-size: 1.25rem; margin: 0; padding: 1rem 0 0.7rem;
+    border: none;
+  }}
+  .section > h2 .chev {{ color: var(--muted); font-size: 0.8rem; transition: transform 0.15s; margin-left: auto; }}
+  .section.collapsed > h2 .chev {{ transform: rotate(-90deg); }}
+  .section.collapsed > :not(h2) {{ display: none; }}
+  .section .body {{ padding-top: 0.2rem; }}
+  h1 {{ color: var(--accent); font-size: 2rem; }}
+  h3 {{ color: var(--low); font-size: 1.05rem; margin: 1rem 0 0.4rem; }}
   p {{ margin: 0.5rem 0; }}
   a {{ color: var(--accent); text-decoration: none; }}
   a:hover {{ text-decoration: underline; }}
-  hr {{ border: none; border-top: 1px solid var(--surface); margin: 1.5rem 0; }}
-  ul, ol {{ padding-left: 1.5rem; margin: 0.5rem 0; }}
+  hr {{ display: none; }}
+  ul, ol {{ padding-left: 1.4rem; margin: 0.5rem 0; }}
   li {{ margin: 0.2rem 0; }}
   strong {{ color: var(--text); font-weight: 600; }}
   em {{ color: var(--subtext); }}
   code {{
-    background: var(--bg2);
-    color: var(--accent);
-    padding: 0.1em 0.4em;
-    border-radius: 4px;
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    font-size: 0.88em;
+    background: var(--bg2); color: var(--accent); padding: 0.1em 0.4em; border-radius: 4px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.86em;
   }}
   pre {{
-    background: var(--bg2);
-    border: 1px solid var(--surface);
-    border-radius: 6px;
-    padding: 1rem;
-    overflow-x: auto;
-    margin: 0.8rem 0;
+    background: var(--bg2); border: 1px solid var(--surface); border-radius: 8px;
+    padding: 1rem; overflow-x: auto; margin: 0.8rem 0;
   }}
-  pre code {{
-    background: none;
-    padding: 0;
-    color: var(--text);
-    font-size: 0.85em;
-  }}
-  table {{
-    width: 100%;
-    border-collapse: collapse;
-    margin: 0.8rem 0;
-    font-size: 0.9em;
-  }}
-  thead tr {{
-    background: var(--surface);
-  }}
+  pre code {{ background: none; padding: 0; color: var(--text); font-size: 0.84em; }}
+  table {{ width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.88em; }}
+  thead tr {{ background: var(--bg2); }}
   th {{
-    color: var(--teal);
-    font-weight: 600;
-    text-align: left;
-    padding: 0.5rem 0.8rem;
-    border-bottom: 2px solid var(--surface2);
+    color: var(--teal); font-weight: 600; text-align: left; padding: 0.5rem 0.8rem;
+    border-bottom: 2px solid var(--surface2); position: sticky; top: 0;
   }}
-  td {{
-    padding: 0.4rem 0.8rem;
-    border-bottom: 1px solid var(--surface);
-    vertical-align: top;
-  }}
+  td {{ padding: 0.45rem 0.8rem; border-bottom: 1px solid var(--surface); vertical-align: top; }}
   tbody tr:nth-child(even) {{ background: var(--bg2); }}
   tbody tr:hover {{ background: var(--surface); }}
-  /* Severity colour helpers applied to table cells */
-  td:first-child {{ font-weight: 600; }}
-  tr:has(td:first-child:contains("CRITICAL")) td:first-child {{ color: var(--critical); }}
-  /* Simpler approach: colour any cell whose text is a severity word */
-  .sev-critical {{ color: var(--critical) !important; }}
-  .sev-high     {{ color: var(--high)     !important; }}
-  .sev-medium   {{ color: var(--medium)   !important; }}
-  .sev-low      {{ color: var(--low)      !important; }}
-  .sev-info     {{ color: var(--info)     !important; }}
+  /* ---------- Severity badges ---------- */
+  .badge {{
+    display: inline-block; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em;
+    padding: 0.15rem 0.55rem; border-radius: 999px; text-transform: uppercase;
+  }}
+  .badge.critical {{ background: var(--critical); color: var(--bg); }}
+  .badge.high     {{ background: var(--high);     color: var(--bg); }}
+  .badge.medium   {{ background: var(--medium);   color: var(--bg); }}
+  .badge.low      {{ background: var(--low);      color: var(--bg); }}
+  .badge.info     {{ background: var(--info);     color: var(--bg); }}
   blockquote {{
-    border-left: 3px solid var(--surface2);
-    padding-left: 1rem;
-    color: var(--subtext);
-    margin: 0.8rem 0;
+    border-left: 3px solid var(--surface2); padding-left: 1rem; color: var(--subtext); margin: 0.8rem 0;
+  }}
+  .back-top {{
+    position: fixed; right: 1.4rem; bottom: 1.4rem; background: var(--surface);
+    color: var(--text); border: 1px solid var(--surface2); border-radius: 999px;
+    width: 42px; height: 42px; display: none; align-items: center; justify-content: center;
+    cursor: pointer; box-shadow: var(--shadow); font-size: 1.1rem;
+  }}
+  @media (max-width: 900px) {{
+    .sidebar {{ display: none; }}
+    .content {{ padding: 1.2rem; }}
   }}
 </style>
 </head>
 <body>
+<div class="layout">
+  <nav class="sidebar">
+    <div class="brand">HTBRecon<small>{title}</small></div>
+    <input id="toc-search" type="search" placeholder="Filter sections…" autocomplete="off">
+    <div class="toc" id="toc"></div>
+    <label class="toc-toggle"><input type="checkbox" id="hide-empty"> Hide empty sections</label>
+  </nav>
+  <main class="content">
+    <div id="dashboard"></div>
+    <div id="report">
 {body}
+    </div>
+  </main>
+</div>
+<button class="back-top" id="back-top" title="Back to top">↑</button>
 <script>
-  // Colour severity cells automatically
-  document.querySelectorAll('td').forEach(td => {{
-    const t = td.textContent.trim().toUpperCase();
-    if (t === 'CRITICAL') td.classList.add('sev-critical');
-    else if (t === 'HIGH')     td.classList.add('sev-high');
-    else if (t === 'MEDIUM')   td.classList.add('sev-medium');
-    else if (t === 'LOW')      td.classList.add('sev-low');
-    else if (t === 'INFO')     td.classList.add('sev-info');
+(function() {{
+  const SEVS = ['critical','high','medium','low','info'];
+  const report = document.getElementById('report');
+
+  // ---- 1. Group each <h2> and its following siblings into a .section card ----
+  const sections = [];
+  const h1 = report.querySelector('h1');
+  Array.from(report.querySelectorAll('h2')).forEach(h2 => {{
+    const sec = document.createElement('section');
+    sec.className = 'section';
+    const body = document.createElement('div');
+    body.className = 'body';
+    let n = h2.nextElementSibling;
+    while (n && n.tagName !== 'H2') {{ const next = n.nextElementSibling; body.appendChild(n); n = next; }}
+    h2.parentNode.insertBefore(sec, h2);
+    sec.appendChild(h2);
+    sec.appendChild(body);
+    const id = 'sec-' + h2.textContent.trim().toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+    sec.id = id;
+    sections.push({{ sec, h2, body, id, title: h2.textContent.trim() }});
   }});
+
+  // ---- 2. Severity badges in tables ----
+  document.querySelectorAll('#report td').forEach(td => {{
+    const t = td.textContent.trim().toLowerCase();
+    if (SEVS.includes(t)) {{
+      td.innerHTML = '<span class="badge ' + t + '">' + t + '</span>';
+    }}
+  }});
+
+  // ---- 3. Classify sections: empty? contains a "hit" (vuln / access / creds)? ----
+  const EMPTY_RE = /(not performed|not run|no .* (found|discovered|identified)|no open ports|no vulnerabilities|no errors|no subdomains|no api endpoints|no web technologies|access denied)/i;
+  const HIT_RE = /(VULNERABLE|ACCESS GRANTED|Pwn3d|ANONYMOUS LOGIN ALLOWED|Valid credentials|introspection enabled)/;
+  sections.forEach(s => {{
+    const txt = s.body.textContent;
+    const hasBadge = s.body.querySelector('.badge.critical, .badge.high');
+    s.hits = 0;
+    (txt.match(new RegExp(HIT_RE.source, 'gi')) || []).forEach(() => s.hits++);
+    if (hasBadge) s.hits += s.body.querySelectorAll('.badge.critical, .badge.high').length;
+    s.empty = EMPTY_RE.test(txt.trim()) && s.body.querySelectorAll('table, li, img').length === 0 && s.hits === 0;
+    if (s.empty) s.sec.classList.add('is-empty');
+    if (s.hits > 0) s.sec.classList.add('has-hit');
+    // collapsible chevron
+    const chev = document.createElement('span');
+    chev.className = 'chev'; chev.textContent = '▼';
+    s.h2.appendChild(chev);
+    s.h2.addEventListener('click', () => s.sec.classList.toggle('collapsed'));
+    if (s.empty) s.sec.classList.add('collapsed');
+  }});
+
+  // ---- 4. Build the TOC ----
+  const toc = document.getElementById('toc');
+  sections.forEach(s => {{
+    const a = document.createElement('a');
+    a.href = '#' + s.id;
+    a.className = 'toc-link' + (s.empty ? ' empty' : '') + (s.hits > 0 ? ' hit' : '');
+    a.dataset.title = s.title.toLowerCase();
+    a.innerHTML = '<span class="t">' + s.title + '</span>' +
+      (s.hits > 0 ? '<span class="count">' + s.hits + '</span>' : '');
+    toc.appendChild(a);
+    s.link = a;
+  }});
+
+  // ---- 5. Dashboard (stats + alerts) ----
+  const openPorts = (() => {{
+    const portSec = sections.find(s => /port summary/i.test(s.title));
+    if (!portSec) return 0;
+    return portSec.body.querySelectorAll('tbody tr').length;
+  }})();
+  const sevCount = sev => document.querySelectorAll('#report .badge.' + sev).length;
+  const crit = sevCount('critical'), high = sevCount('high');
+  // Count access/vuln per line element (not per keyword) to avoid double-counting
+  // lines like "ACCESS GRANTED (Pwn3d!)".
+  const countLines = re => {{
+    let c = 0;
+    document.querySelectorAll('#report p, #report li').forEach(el => {{ if (re.test(el.textContent)) c++; }});
+    return c;
+  }};
+  const accessCount = countLines(/ACCESS GRANTED|Pwn3d|ANONYMOUS LOGIN ALLOWED|Valid credentials/i);
+  const vulnCount = countLines(/VULNERABLE/);
+
+  const stats = [
+    {{ n: openPorts, l: 'Open ports', c: 'neutral' }},
+    {{ n: crit, l: 'Critical CVEs', c: crit ? 'crit' : 'neutral' }},
+    {{ n: high, l: 'High CVEs', c: high ? 'high' : 'neutral' }},
+    {{ n: vulnCount, l: 'Vuln checks hit', c: vulnCount ? 'crit' : 'neutral' }},
+    {{ n: accessCount, l: 'Access obtained', c: accessCount ? 'good' : 'neutral' }},
+  ];
+  const dash = document.getElementById('dashboard');
+  let html = '';
+  if (h1) {{
+    // pull target/date lines (first two <p> or the <p> right after h1)
+    const metaP = h1.nextElementSibling && h1.nextElementSibling.tagName === 'P' ? h1.nextElementSibling.innerHTML : '';
+    html += '<div class="hero"><h1>' + h1.textContent.replace(/^Reconnaissance Report:\\s*/,'') + '</h1>' +
+            (metaP ? '<div class="meta">' + metaP.replace(/<br\\s*\\/?>/gi, '</span><span>').replace(/^/, '<span>').replace(/$/, '</span>') + '</div>' : '') +
+            '</div>';
+    h1.style.display = 'none';
+    if (h1.nextElementSibling && h1.nextElementSibling.tagName === 'P') h1.nextElementSibling.style.display = 'none';
+  }}
+  html += '<div class="stats">' + stats.map(s =>
+    '<div class="stat ' + s.c + '"><div class="num">' + s.n + '</div><div class="lbl">' + s.l + '</div></div>'
+  ).join('') + '</div>';
+
+  // alerts: scan sections with hits, extract the key lines
+  const alerts = [];
+  sections.forEach(s => {{
+    s.body.querySelectorAll('p, li').forEach(el => {{
+      const t = el.textContent;
+      if (/VULNERABLE/.test(t)) alerts.push({{ cls: 'vuln', tag: 'VULN', title: s.title, text: t.trim() }});
+      else if (/ACCESS GRANTED|Pwn3d|ANONYMOUS LOGIN ALLOWED|Valid credentials/.test(t))
+        alerts.push({{ cls: 'win', tag: 'ACCESS', title: s.title, text: t.trim() }});
+    }});
+  }});
+  if (alerts.length) {{
+    html += '<div class="alerts">' + alerts.slice(0, 12).map(a =>
+      '<div class="alert ' + a.cls + '"><span class="tag">' + a.tag + '</span>' +
+      '<span><b>' + a.title + '</b> — ' + a.text.replace(/</g,'&lt;') + '</span></div>'
+    ).join('') + '</div>';
+  }}
+  dash.innerHTML = html;
+
+  // ---- 6. TOC search filter ----
+  const search = document.getElementById('toc-search');
+  search.addEventListener('input', () => {{
+    const q = search.value.toLowerCase();
+    sections.forEach(s => {{
+      const match = s.title.toLowerCase().includes(q);
+      s.link.style.display = match ? '' : 'none';
+    }});
+  }});
+
+  // ---- 7. Hide empty toggle ----
+  const hideEmpty = document.getElementById('hide-empty');
+  hideEmpty.addEventListener('change', () => {{
+    sections.forEach(s => {{
+      if (s.empty) {{
+        s.sec.style.display = hideEmpty.checked ? 'none' : '';
+        s.link.style.display = hideEmpty.checked ? 'none' : '';
+      }}
+    }});
+  }});
+
+  // ---- 8. Scroll spy ----
+  const spy = () => {{
+    let cur = sections[0];
+    for (const s of sections) {{
+      if (s.sec.getBoundingClientRect().top <= 120) cur = s;
+    }}
+    sections.forEach(s => s.link.classList.toggle('active', s === cur));
+    document.getElementById('back-top').style.display = window.scrollY > 400 ? 'flex' : 'none';
+  }};
+  window.addEventListener('scroll', spy, {{ passive: true }});
+  spy();
+  document.getElementById('back-top').addEventListener('click', () => window.scrollTo({{ top: 0 }}));
+}})();
 </script>
 </body>
 </html>
