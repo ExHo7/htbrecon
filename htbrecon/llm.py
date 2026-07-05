@@ -25,8 +25,8 @@ _DEFAULT_OLLAMA_HOST = "http://localhost:11434"
 # normalisation, version filtering); "large" = the final attack-vector analysis.
 # Each tier's model can be overridden from the environment / .env.
 _ANTHROPIC_MODELS = {
-    "small": "claude-haiku-4-5-20251001",
-    "large": "claude-sonnet-4-20250514",
+    "small": "claude-haiku-4-5",
+    "large": "claude-sonnet-5",
 }
 _ANTHROPIC_MODEL_ENV = {
     "small": "HTBRECON_ANTHROPIC_MODEL_SMALL",
