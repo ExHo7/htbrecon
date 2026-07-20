@@ -240,16 +240,10 @@ async def analyze(ctx: ReconContext) -> str:
         print_info("No findings to analyze")
         return ""
 
-    try:
-        temperature = float(os.environ.get("HTBRECON_AI_TEMPERATURE", "0.2"))
-    except ValueError:
-        temperature = 0.2
-
     text = await llm.complete(
         system=SYSTEM_PROMPT,
         user=f"Analyze these reconnaissance results and suggest attack vectors:\n\n{findings_summary}",
         tier="large",
         max_tokens=4096,
-        temperature=temperature,
     )
     return text or ""

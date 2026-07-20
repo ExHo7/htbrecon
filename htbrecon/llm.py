@@ -67,20 +67,17 @@ async def complete(
     tier: str = "small",
     max_tokens: int = 1024,
     json_mode: bool = False,
-    temperature: float | None = None,
 ) -> str | None:
     """Send a system+user chat to the active provider and return its text.
 
     Returns None when no provider is available or the call fails — never raises.
     ``json_mode`` hints the backend to emit JSON (Ollama: ``format=json``).
-    ``temperature`` overrides the sampling temperature; None falls back to each
-    provider's deterministic default (0 for structured tasks).
     """
     provider = active_provider()
     if provider == "anthropic":
-        return await _complete_anthropic(system, user, tier, max_tokens, temperature)
+        return await _complete_anthropic(system, user, tier, max_tokens)
     if provider == "ollama":
-        return await _complete_ollama(system, user, max_tokens, json_mode, temperature)
+        return await _complete_ollama(system, user, max_tokens, json_mode)
     return None
 
 
@@ -90,8 +87,7 @@ def _strip_think(text: str) -> str:
 
 
 async def _complete_anthropic(
-    system: str, user: str, tier: str, max_tokens: int,
-    temperature: float | None = None,
+    system: str, user: str, tier: str, max_tokens: int
 ) -> str | None:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -103,9 +99,6 @@ async def _complete_anthropic(
         return None
 
     model = _anthropic_model(tier)
-    kwargs: dict = {}
-    if temperature is not None:
-        kwargs["temperature"] = temperature
     try:
         client = anthropic.AsyncAnthropic(api_key=api_key)
         response = await client.messages.create(
@@ -113,7 +106,6 @@ async def _complete_anthropic(
             max_tokens=max_tokens,
             system=system,
             messages=[{"role": "user", "content": user}],
-            **kwargs,
         )
         if not response.content:
             return None
@@ -125,8 +117,7 @@ async def _complete_anthropic(
 
 
 async def _complete_ollama(
-    system: str, user: str, max_tokens: int, json_mode: bool,
-    temperature: float | None = None,
+    system: str, user: str, max_tokens: int, json_mode: bool
 ) -> str | None:
     model = os.environ.get("HTBRECON_OLLAMA_MODEL", "").strip()
     if not model:
@@ -147,10 +138,7 @@ async def _complete_ollama(
         ],
         "stream": False,
         "think": False,
-        "options": {
-            "temperature": temperature if temperature is not None else 0,
-            "num_predict": max_tokens,
-        },
+        "options": {"temperature": 0, "num_predict": max_tokens},
     }
     if json_mode:
         payload["format"] = "json"

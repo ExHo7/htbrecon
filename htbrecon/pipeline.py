@@ -34,6 +34,73 @@ def _setup_dirs(config: ReconConfig) -> None:
         (config.project_dir / subdir).mkdir(parents=True, exist_ok=True)
 
 
+def _open_in_browser(html_path: Path) -> None:
+    """Best-effort open of the HTML report — honest about failure.
+
+    Handles the common HTB case where htbrecon runs under ``sudo`` (root): the
+    invoking user's GUI-session env (DISPLAY / XDG_RUNTIME_DIR / XAUTHORITY) is
+    not inherited across sudo, so the browser silently fails to reach the
+    display while ``webbrowser.open`` still reports success. Here we rebuild that
+    environment and re-launch as ``$SUDO_USER`` — and only claim success when a
+    launch was actually attempted with a usable display.
+    """
+    import os
+    import shutil
+    import subprocess
+
+    uri = html_path.resolve().as_uri()
+    manual = f"No GUI browser opened — open manually: {html_path}"
+
+    opener = os.environ.get("BROWSER") or shutil.which("xdg-open") or shutil.which("firefox")
+    if not opener:
+        print_warning(manual)
+        return
+
+    sudo_user = os.environ.get("SUDO_USER")
+    is_root = getattr(os, "geteuid", lambda: 1)() == 0
+
+    if is_root and sudo_user:
+        # Reconstruct the desktop-user env lost across sudo and launch as them.
+        try:
+            import pwd
+
+            pw = pwd.getpwnam(sudo_user)
+        except (ImportError, KeyError):
+            print_warning(manual)
+            return
+        display = os.environ.get("DISPLAY") or ":0"
+        runtime = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{pw.pw_uid}"
+        cmd = [
+            "sudo", "-u", sudo_user, "env",
+            f"DISPLAY={display}",
+            f"XDG_RUNTIME_DIR={runtime}",
+        ]
+        xauth = os.environ.get("XAUTHORITY")
+        if not xauth:
+            home_xauth = os.path.join(pw.pw_dir, ".Xauthority")
+            if os.path.exists(home_xauth):
+                xauth = home_xauth
+        if xauth:
+            cmd.append(f"XAUTHORITY={xauth}")
+        cmd += [opener, uri]
+    else:
+        if os.name == "posix" and not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+            print_warning(manual + " (no DISPLAY)")
+            return
+        cmd = [opener, uri]
+
+    try:
+        subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        print_success("Opening report in your browser...")
+    except Exception as exc:  # pragma: no cover - launch environment dependent
+        print_warning(f"{manual} ({type(exc).__name__}: {exc})")
+
+
 async def run_pipeline(config: ReconConfig) -> ReconContext:
     """Execute the fast reconnaissance pipeline."""
     ctx = ReconContext(config)
@@ -235,19 +302,11 @@ async def run_pipeline(config: ReconConfig) -> ReconContext:
     print_success(f"Report saved to: {report_path}")
 
     if ctx.config.html:
-        import webbrowser
-
         from htbrecon.report import generate_html
 
         html_path = generate_html(ctx)
         print_success(f"HTML report: {html_path}")
-        try:
-            if webbrowser.open(html_path.resolve().as_uri()):
-                print_success("Opening report in your browser...")
-            else:
-                print_warning(f"No browser available — open manually: {html_path}")
-        except webbrowser.Error:
-            print_warning(f"No browser available — open manually: {html_path}")
+        _open_in_browser(html_path)
 
     # Final summary
     console.print()
