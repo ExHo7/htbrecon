@@ -1,8 +1,34 @@
 from __future__ import annotations
 
+import os
+
 from htbrecon import llm
 from htbrecon.console import print_info, print_warning
 from htbrecon.models import ReconContext
+
+# This tehnologies are excluded from AI CVE analysis due to low signal.
+_DEFAULT_LOW_SIGNAL = frozenset({
+    "nginx", "http_server", "openssh", "openssl", "bind",
+    "linux_kernel", "ubuntu_linux", "debian_linux", "windows",
+    "php", "proftpd", "vsftpd",
+})
+
+
+def _low_signal_products() -> frozenset[str]:
+    """Resolve the low-signal product denylist, honouring env overrides.
+
+    HTBRECON_CVE_EXCLUDE        replaces the default set (comma-separated names).
+    HTBRECON_CVE_EXCLUDE_EXTRA  adds to the active set.
+    Both are case-insensitive product names.
+    """
+    base_env = os.environ.get("HTBRECON_CVE_EXCLUDE", "").strip()
+    base = (
+        frozenset(p.strip().lower() for p in base_env.split(",") if p.strip())
+        if base_env else _DEFAULT_LOW_SIGNAL
+    )
+    extra_env = os.environ.get("HTBRECON_CVE_EXCLUDE_EXTRA", "").strip()
+    extra = frozenset(p.strip().lower() for p in extra_env.split(",") if p.strip())
+    return base | extra
 
 
 def _build_prompt(ctx: ReconContext) -> str:
@@ -57,11 +83,26 @@ def _build_prompt(ctx: ReconContext) -> str:
         if ctx.smb.av_products:
             sections.append(f"AV/EDR on target: {', '.join(ctx.smb.av_products)}")
 
+    if ctx.spider and ctx.spider.interesting_files:
+        files = "\n".join(f"  {f}" for f in ctx.spider.interesting_files[:25])
+        sections.append(
+            f"SMB spidered files ({len(ctx.spider.interesting_files)} interesting — "
+            f"inspect for creds/configs/scripts/keys):\n{files}"
+        )
+
     if ctx.ftp:
         if ctx.ftp.anonymous:
             sections.append(f"FTP: anonymous login ALLOWED on port {ctx.ftp.port}")
         elif ctx.ftp.accessible:
             sections.append(f"FTP: authenticated access on port {ctx.ftp.port}")
+
+    if ctx.winrm and ctx.winrm.accessible:
+        sections.append(
+            f"WinRM: access CONFIRMED on port {ctx.winrm.port} — evil-winrm foothold available"
+        )
+
+    if ctx.ssh and ctx.ssh.accessible:
+        sections.append(f"SSH: authenticated access CONFIRMED on port {ctx.ssh.port}")
 
     if ctx.mssql and ctx.mssql.accessible:
         sections.append(
@@ -95,6 +136,13 @@ def _build_prompt(ctx: ReconContext) -> str:
         if ctx.ldap.kerberoast_hashes:
             sections.append(f"Kerberoastable hashes found: {len(ctx.ldap.kerberoast_hashes)}")
 
+    if ctx.kerbrute and ctx.kerbrute.valid_users:
+        sections.append(
+            f"Kerbrute — {len(ctx.kerbrute.valid_users)} valid AD user(s) enumerated "
+            f"(no creds needed; AS-REP roast candidates): "
+            f"{', '.join(ctx.kerbrute.valid_users[:30])}"
+        )
+
     if ctx.bloodhound and ctx.bloodhound.summary_text:
         sections.append(f"BloodHound AD enumeration:\n{ctx.bloodhound.summary_text}")
 
@@ -112,7 +160,7 @@ def _build_prompt(ctx: ReconContext) -> str:
                             "\n".join(f"  {e}" for e in all_shown))
 
     # Products rarely exploitable on HTB — keep in full report but skip in AI prompt
-    _HTB_LOW_SIGNAL = frozenset({"nginx", "openssh", "openssl", "http_server"})
+    low_signal = _low_signal_products()
 
     if ctx.katana and ctx.katana.interesting_urls:
         sections.append(
@@ -122,7 +170,8 @@ def _build_prompt(ctx: ReconContext) -> str:
         )
 
     if ctx.vulnx and ctx.vulnx.findings:
-        actionable = [f for f in ctx.vulnx.findings if f.product not in _HTB_LOW_SIGNAL]
+        actionable = [f for f in ctx.vulnx.findings if f.product.lower() not in low_signal]
+        excluded = len(ctx.vulnx.findings) - len(actionable)
         kev = [f for f in actionable if f.is_kev]
         crit = [f for f in actionable if f.severity == "critical"]
         high_poc = [f for f in actionable if f.severity == "high" and f.is_poc]
@@ -153,7 +202,7 @@ def _build_prompt(ctx: ReconContext) -> str:
         if vuln_lines:
             sections.append(
                 f"CVE intelligence — {len(actionable)} actionable CVE(s) "
-                f"(nginx/openssh excluded as low-signal for HTB) "
+                f"({excluded} common/low-signal CVE(s) excluded for HTB) "
                 f"({len(in_range)} version-matched, {len(kev)} KEV, {len(crit)} critical):\n"
                 + "\n".join(vuln_lines)
             )
@@ -191,10 +240,16 @@ async def analyze(ctx: ReconContext) -> str:
         print_info("No findings to analyze")
         return ""
 
+    try:
+        temperature = float(os.environ.get("HTBRECON_AI_TEMPERATURE", "0.2"))
+    except ValueError:
+        temperature = 0.2
+
     text = await llm.complete(
         system=SYSTEM_PROMPT,
         user=f"Analyze these reconnaissance results and suggest attack vectors:\n\n{findings_summary}",
         tier="large",
         max_tokens=4096,
+        temperature=temperature,
     )
     return text or ""

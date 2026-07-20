@@ -52,7 +52,7 @@ def test_anthropic_model_defaults(monkeypatch):
     monkeypatch.delenv("HTBRECON_ANTHROPIC_MODEL_SMALL", raising=False)
     monkeypatch.delenv("HTBRECON_ANTHROPIC_MODEL_LARGE", raising=False)
     assert llm._anthropic_model("small") == "claude-haiku-4-5-20251001"
-    assert llm._anthropic_model("large") == "claude-sonnet-4-20250514"
+    assert llm._anthropic_model("large") == "claude-sonnet-5"
 
 
 def test_anthropic_model_env_override(monkeypatch):
